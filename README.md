@@ -1,4 +1,74 @@
-# 閱讀機器人使用說明
+# DeepSeek-OCR 閱讀機器人
+
+---
+
+## ⚠️ 重要前置需求
+
+> **🚨 本閱讀機器人需要搭配 DeepSeek-OCR API 服務才能使用！**
+
+在使用本閱讀機器人之前，您**必須**先安裝並啟動 **DeepSeek-OCR API 服務**：
+
+### 📦 DeepSeek-OCR API 服務（必需）
+
+**GitHub 倉庫**：**[https://github.com/ch-neural/deepseek-ocr-api](https://github.com/ch-neural/deepseek-ocr-api)**
+
+**快速安裝**：
+
+```bash
+# 1. Clone API 服務倉庫
+git clone https://github.com/ch-neural/deepseek-ocr-api.git
+cd deepseek-ocr-api
+
+# 2. 安裝依賴
+pip install -r requirements.txt
+
+# 3. 登入 Hugging Face
+huggingface-cli login
+
+# 4. 啟動 API 服務
+python app.py
+```
+
+**驗證安裝**：
+
+```bash
+curl http://localhost:5000/health
+# 應該看到: {"status": "healthy", "model": "DeepSeek-OCR", ...}
+```
+
+> 💡 **詳細安裝指南**：請參閱 [README/DEEPSEEK_API_SETUP.md](README/DEEPSEEK_API_SETUP.md)
+
+---
+
+### 🔗 架構說明
+
+```
+┌────────────────────────────────────────────────────────────┐
+│           DeepSeek-OCR 閱讀機器人 (本專案)                    │
+│   Raspberry Pi + GPIO + 相機 + Web 介面                     │
+└────────────────────────────────────────────────────────────┘
+                      ↓ HTTP API 調用
+┌────────────────────────────────────────────────────────────┐
+│        DeepSeek-OCR API 服務 (必需安裝)                      │
+│   https://github.com/ch-neural/deepseek-ocr-api           │
+│   提供 OCR 辨識功能 (需要 GPU 支援)                          │
+└────────────────────────────────────────────────────────────┘
+```
+
+**本閱讀機器人負責**：
+- 📷 相機拍攝和預覽
+- 🔘 GPIO 按鈕控制
+- 🌐 Web 介面操作
+- 🔊 語音朗讀
+- 📝 結果顯示和管理
+
+**DeepSeek-OCR API 服務負責**：
+- 🤖 OCR 文字識別
+- 🧠 DeepSeek-OCR 模型推理
+- 🖼️ 圖像預處理
+- ⚡ GPU 加速運算
+
+---
 
 ## 📖 簡介
 
@@ -31,7 +101,31 @@
 
 ## 🚀 安裝步驟
 
-### 快速安裝（推薦）
+> ⚠️ **開始之前**：請確保已安裝並啟動 [DeepSeek-OCR API 服務](https://github.com/ch-neural/deepseek-ocr-api)
+
+### 步驟 0：確認 DeepSeek-OCR API 服務
+
+**必須先完成**：
+
+```bash
+# 測試 API 服務是否運行中
+curl http://localhost:5000/health
+
+# 預期回應：
+# {
+#   "status": "healthy",
+#   "model": "DeepSeek-OCR",
+#   "timestamp": "..."
+# }
+```
+
+如果看到錯誤，請先安裝 API 服務：[https://github.com/ch-neural/deepseek-ocr-api](https://github.com/ch-neural/deepseek-ocr-api)
+
+---
+
+### 步驟 1：安裝閱讀機器人
+
+#### 快速安裝（推薦）
 
 ```bash
 cd example_bookReader
@@ -111,13 +205,29 @@ ls /dev/video*
 
 編輯 `config.ini` 檔案以調整系統參數：
 
-### API 設定
+### API 設定（重要！）
 
 ```ini
 [API]
-# DeepSeek-OCR API 伺服器位址（請修改為您的 API 伺服器位址）
-api_url = http://172.30.19.20:5000
+# DeepSeek-OCR API 伺服器位址
+# 📌 請修改為您的 DeepSeek-OCR API 服務位址
+api_url = http://localhost:5000         # 如果 API 在本機
+# api_url = http://192.168.1.100:5000   # 如果 API 在區網其他機器
+# api_url = http://your-server.com:5000 # 如果 API 在遠端伺服器
+
+ocr_endpoint = /ocr
+request_timeout = 90
 ```
+
+**網路配置說明**：
+
+| 場景 | API 位址設定 | 說明 |
+|------|-------------|------|
+| 同一台機器 | `http://localhost:5000` | API 和閱讀機器人在同一台機器 |
+| 同一區網 | `http://192.168.1.100:5000` | API 在另一台區網機器 |
+| 遠端伺服器 | `http://your-server.com:5000` | API 在遠端伺服器 |
+
+> 💡 **完整配置指南**：請參閱 [README/DEEPSEEK_API_SETUP.md](README/DEEPSEEK_API_SETUP.md)
 
 ### GPIO 設定
 
@@ -173,8 +283,18 @@ volume = 1.0
 
 ### 基本使用
 
-1. 確認 DeepSeek-OCR API 伺服器正在運行
-2. 啟動閱讀機器人：
+#### 1. 確認 DeepSeek-OCR API 服務運行中
+
+```bash
+# 測試 API 連接
+curl http://localhost:5000/health
+
+# 如果無法連接，請先啟動 API 服務
+cd /path/to/deepseek-ocr-api
+python app.py
+```
+
+#### 2. 啟動閱讀機器人
 
 ```bash
 cd example_bookReader
