@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 虛擬環境
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 環境變數檔案（包含 API Keys）
+.env
+.env.*
+*.env
+
+# 日誌檔案
+logs/*.log
+*.log
+
+# OCR 結果（可能包含大量測試數據）
+ocr_results.json
+ocr_results.*.json
+
+# 拍攝的圖片
+captured_images/*.jpg
+captured_images/*.png
+scanned_books/*.jpg
+scanned_books/*.png
+
+# 但保留目錄結構
+!logs/.gitkeep
+!captured_images/.gitkeep
+
+# 本地配置檔案
+config.ini
+
+# 設定檔備份
+config.ini.backup
+config.ini.*
+
+# 測試檔案
+test_*.jpg
+test_*.png
+test_capture.*
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# 除錯檔案
+debug*.log
+profile.stats
+diagnostic_report.txt
+
+# 不上傳的 README 檔案（內部文檔）
+README/OPENAI_PREANALYSIS_CHANGELOG.md
+README/REQUEST_TIMEOUT_FIX.md
+README/CONTINUOUS_PREVIEW_FEATURE.md
+README/SIMULATION_MODE.md
+

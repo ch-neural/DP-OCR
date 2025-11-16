@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📖 Book Reader OCR System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/book_reader.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- 左側固定 Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>📖 Book Reader</h1>
+                <p class="subtitle">OCR System</p>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- 相機設定 -->
+                <section class="sidebar-section">
+                    <h2>📷 相機設定</h2>
+                    <label for="camera-select" class="label">選擇相機設備:</label>
+                    <select id="camera-select" class="camera-select">
+                        {% for camera in available_cameras %}
+                        <option value="{{ camera.id }}" {% if camera.id == current_camera_id %}selected{% endif %}>
+                            {{ camera.name }} ({{ camera.device_path }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="info-box">
+                        <p>當前設備: <span id="camera-device">{{ current_camera_id }}</span></p>
+                    </div>
+                    <label for="camera-resolution" class="label">相機解析度:</label>
+                    <select id="camera-resolution" class="camera-select">
+                        <option value="640x480">640x480</option>
+                        <option value="1280x720" selected>1280x720</option>
+                        <option value="1920x1080">1920x1080</option>
+                    </select>
+                    <label for="image-rotation" class="label">影像旋轉角度:</label>
+                    <select id="image-rotation" class="camera-select">
+                        <option value="0" selected>0° (不旋轉)</option>
+                        <option value="90">90° (順時針)</option>
+                        <option value="180">180°</option>
+                        <option value="270">270° (逆時針)</option>
+                    </select>
+                    <label for="model-max-size" class="label">送交模型的長邊尺寸:</label>
+                    <select id="model-max-size" class="camera-select">
+                        <option value="320">320</option>
+                        <option value="480">480</option>
+                        <option value="640">640</option>
+                        <option value="960">960</option>
+                        <option value="1024" selected>1024</option>
+                        <option value="2048">2048</option>
+                    </select>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable-preview" checked>
+                        <span>啟用相機預覽</span>
+                    </label>
+                    <button id="refresh-cameras-btn" class="btn btn-secondary" style="margin-top: 10px;">
+                        🔄 重新偵測相機
+                    </button>
+                </section>
+                
+                <!-- OCR 設定 -->
+                <section class="sidebar-section">
+                    <h2>OCR 設定</h2>
+                    <label for="ocr-prompt" class="label">自訂 Prompt:</label>
+                    <textarea 
+                        id="ocr-prompt" 
+                        class="prompt-textarea" 
+                        rows="4"
+                        placeholder="輸入 OCR prompt...">{{ default_prompt }}</textarea>
+                    <p class="help-text">此 prompt 會附加到每次 OCR 請求</p>
+                </section>
+                
+                <!-- 操作按鈕 -->
+                <section class="sidebar-section">
+                    <button id="capture-btn" class="btn btn-primary">
+                        📸 拍攝 & OCR
+                    </button>
+                    <button id="reset-camera-btn" class="btn btn-secondary">
+                        🔧 重置相機
+                    </button>
+                </section>
+                
+                <!-- OCR 結果操作 -->
+                <section class="sidebar-section">
+                    <button id="clear-results-btn" class="btn btn-danger">
+                        🗑️ 清除所有結果
+                    </button>
+                </section>
+            </div>
+        </aside>
+        
+        <!-- 主內容區域 -->
+        <main class="main-content">
+            <div class="content-header">
+                <h2>📷 相機預覽</h2>
+            </div>
+            
+            <div class="content-grid">
+                <!-- 左側：相機預覽 -->
+                <div class="preview-section">
+                    <div class="preview-container">
+                        <img id="camera-preview" src="" alt="相機預覽">
+                        <div id="camera-error" class="error-message" style="display: none;">
+                            <p>❌ 無法讀取相機畫面</p>
+                            <p class="error-details">請檢查相機連接或點擊「重置相機」按鈕</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 拍攝的照片顯示區域 -->
+                    <div id="captured-image-area" class="captured-image-area" style="display: none;">
+                        <div class="captured-image-header">
+                            <h3>📸 拍攝的照片</h3>
+                        </div>
+                        <div class="captured-image-container">
+                            <img id="captured-image" src="" alt="拍攝的照片">
+                        </div>
+                    </div>
+                    
+                    <!-- OCR 結果顯示區域 -->
+                    <div id="ocr-result-area" class="ocr-result-area" style="display: none;">
+                        <div class="result-header">
+                            <h3>OCR 結果</h3>
+                            <button id="close-result-btn" class="btn-close">×</button>
+                        </div>
+                        <div id="ocr-result-content" class="result-content"></div>
+                    </div>
+                </div>
+                
+                <!-- 右側：OCR 結果歷史 -->
+                <div class="history-section">
+                    <div class="section-header">
+                        <h2>📋 OCR 結果歷史</h2>
+                    </div>
+                    <div id="results-history" class="results-history">
+                        <div class="empty-state">
+                            <p>尚無 OCR 結果</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- 載入指示器 -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">處理中...</p>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/book_reader.js') }}?v=20250113-3"></script>
+</body>
+</html>
+

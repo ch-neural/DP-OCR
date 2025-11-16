@@ -1,0 +1,28 @@
+[Unit]
+Description=GPIO Button Test Service
+After=multi-user.target
+
+[Service]
+Type=simple
+# 重要：設置為運行腳本的用戶（例如 pi）
+User=pi
+Group=pi
+# 關鍵：設置工作目錄為腳本所在目錄，確保有寫入權限
+# 這樣 lgpio 庫才能創建通知文件 .lgd-nfy-*
+WorkingDirectory=/GPUData/working/Deepseek-OCR/example_bookReader
+# 使用完整路徑執行 Python 腳本
+ExecStart=/usr/bin/python3 /GPUData/working/Deepseek-OCR/example_bookReader/test_gpio_button.py
+# 如果服務失敗，自動重啟
+Restart=on-failure
+RestartSec=10
+# 日誌輸出到 systemd journal
+StandardOutput=journal
+StandardError=journal
+
+# 環境變數
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target
+
+

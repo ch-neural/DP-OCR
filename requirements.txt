@@ -1,0 +1,42 @@
+# 閱讀機器人依賴套件
+
+# Raspberry Pi GPIO 控制
+# Raspberry Pi 5 使用 gpiod，Raspberry Pi 4 及更早使用 RPi.GPIO
+# 程式會自動偵測並使用適當的庫
+
+# 選項 1: Raspberry Pi 5 (推薦使用 gpiod)
+# libgpiod>=2.0  # 需要系統套件: sudo apt install python3-libgpiod
+
+# 選項 2: Raspberry Pi 4 及更早版本
+RPi.GPIO>=0.7.1
+
+# OpenCV - 攝影機影像處理
+opencv-python>=4.8.0
+
+# HTTP 請求
+requests>=2.31.0
+
+# 音訊播放
+pygame>=2.5.0
+
+# OpenAI API（圖像預分析功能）
+openai>=1.6.0
+
+# 環境變數載入
+python-dotenv>=1.0.0
+
+# Streamlit Web 界面（book_reader_streamlit.py 需要）
+streamlit>=1.28.0
+
+# Flask Web 界面（book_reader_flask.py 需要）
+Flask>=2.3.0
+flask-cors>=4.0.0
+
+# Python 標準函式庫（無需安裝）
+# - configparser
+# - logging
+# - datetime
+# - pathlib
+# - base64
+# - json
+
