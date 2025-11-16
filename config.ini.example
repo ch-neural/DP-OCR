@@ -1,0 +1,76 @@
+[API]
+# DeepSeek-OCR API 伺服器位址
+api_url = http://localhost:5000
+# API 端點
+ocr_endpoint = /ocr
+# 請求超時時間（秒）
+# 注意：DeepSeek-OCR 處理複雜圖像可能需要 30-60 秒
+# 建議設定為至少 60 秒以避免超時
+request_timeout = 90
+
+[GPIO]
+# 觸發 GPIO 腳位編號（BCM 編號）
+trigger_pin = 17
+# 去彈跳延遲時間（秒）
+# 注意：系統現在使用按鈕點擊偵測（按下→釋放），不再使用間隔檢查方式
+debounce_delay = 0.2
+# 模擬模式（在非 Raspberry Pi 環境測試時設為 true）
+# 設為 false 以使用真實 GPIO 按鈕點擊偵測
+simulation_mode = false
+# 模擬觸發間隔（秒，僅模擬模式有效）
+simulation_trigger_interval = 10
+
+[CAMERA]
+# USB Camera 裝置編號（0 = 第一個攝影機）
+camera_device = 0
+# 拍攝解析度寬度
+frame_width = 1280
+# 拍攝解析度高度
+frame_height = 720
+# 拍攝前延遲時間（秒）
+capture_delay = 0.5
+# 儲存拍攝的圖片（用於除錯）
+save_captured_image = true
+# 圖片儲存路徑
+image_save_path = captured_images
+# 是否顯示攝影機畫面到 LCD 螢幕
+show_preview = true
+# 預覽視窗名稱
+preview_window_name = 閱讀機器人 - 即時預覽
+# 結果視窗名稱
+result_window_name = 閱讀機器人 - 拍攝結果
+# 預覽顯示時間（秒，0 表示持續顯示直到按鍵）
+preview_duration = 2.0
+# 是否持續顯示預覽視窗（即使拍照後也不關閉）
+continuous_preview = true
+# 結果顯示時間（秒）
+result_display_duration = 3.0
+
+[AUDIO]
+# 成功辨識後播放的音檔
+success_sound = voices/看完了1.mp3
+# 辨識失敗後播放的音檔
+error_sound = voices/看不懂1.mp3
+# 音量（0.0 到 1.0）
+volume = 1.0
+
+[OCR]
+# 自訂提示詞（預設為繁體中文書 OCR）
+# 注意：如果啟用 OpenAI 預分析，此 prompt 將作為後備選項
+prompt = 這是一本繁體中文書的內頁screen, 請OCR 並用繁體中文輸出結果。
+
+[OPENAI]
+# OpenAI 圖像預分析功能（智能判斷是否包含文字）
+# 啟用此功能需要在 .env 檔案中設定 OPENAI_API_KEY
+enable_preanalysis = false
+# OpenAI 模型（推薦使用 gpt-4o-mini，成本較低且效果好）
+model = gpt-4o-mini
+
+[LOGGING]
+# 日誌等級（DEBUG, INFO, WARNING, ERROR）
+log_level = INFO
+# 日誌檔案路徑
+log_file = logs/book_reader.log
+# 是否在終端機顯示日誌
+console_output = true
+
