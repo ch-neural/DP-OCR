@@ -118,8 +118,68 @@ function initEventListeners() {
     elements.uploadArea.addEventListener('drop', handleDrop);
 }
 
+// 檢查是否在安全上下文中
+function isSecureContext() {
+    // localhost 或 127.0.0.1 或 HTTPS 都算安全上下文
+    const isLocalhost = location.hostname === 'localhost' || 
+                        location.hostname === '127.0.0.1' ||
+                        location.hostname === '[::1]';
+    const isHttps = location.protocol === 'https:';
+    return isLocalhost || isHttps;
+}
+
+// 顯示安全上下文警告
+function showSecurityWarning() {
+    const warningHtml = `
+        <div style="background: #5a2d2d; color: #ff6b6b; padding: 15px; border-radius: 8px; margin: 10px 0;">
+            <h4 style="margin: 0 0 10px 0;">⚠️ 瀏覽器安全限制</h4>
+            <p style="margin: 5px 0; font-size: 0.9em;">
+                Webcam API 需要在 <strong>安全上下文</strong>（HTTPS 或 localhost）中才能使用。
+            </p>
+            <p style="margin: 10px 0 5px 0; font-size: 0.85em;">
+                <strong>解決方案：</strong>
+            </p>
+            <ol style="margin: 5px 0; padding-left: 20px; font-size: 0.85em;">
+                <li>使用 <code>localhost</code> 或 <code>127.0.0.1</code> 連接</li>
+                <li>在 Chrome 網址列輸入 <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>，將此網址加入白名單</li>
+                <li>設定 HTTPS（使用 SSL 證書）</li>
+                <li>改用「上傳圖片」功能</li>
+            </ol>
+        </div>
+    `;
+    
+    const overlay = document.getElementById('webcam-overlay');
+    if (overlay) {
+        overlay.innerHTML = warningHtml;
+        overlay.classList.remove('hidden');
+    }
+    
+    updateWebcamStatus('error', '❌ 需要 HTTPS 或 localhost');
+}
+
 // 列舉可用的攝影機設備
 async function enumerateDevices() {
+    // 檢查是否支援 mediaDevices API
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('此瀏覽器不支援 mediaDevices API');
+        elements.cameraSelect.innerHTML = '<option value="">瀏覽器不支援</option>';
+        
+        if (!isSecureContext()) {
+            showSecurityWarning();
+        } else {
+            updateWebcamStatus('error', '瀏覽器不支援 Webcam API');
+        }
+        return;
+    }
+    
+    // 檢查安全上下文
+    if (!isSecureContext()) {
+        console.warn('非安全上下文，Webcam 功能可能受限');
+        showSecurityWarning();
+        elements.cameraSelect.innerHTML = '<option value="">需要 HTTPS</option>';
+        return;
+    }
+    
     try {
         // 先請求權限（某些瀏覽器需要）
         const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -144,10 +204,16 @@ async function enumerateDevices() {
         });
         
         console.log(`偵測到 ${availableDevices.length} 個攝影機設備`);
+        updateWebcamStatus('disconnected', `✅ 偵測到 ${availableDevices.length} 個攝影機`);
     } catch (error) {
         console.error('列舉設備失敗:', error);
         elements.cameraSelect.innerHTML = '<option value="">無法存取攝影機</option>';
-        updateWebcamStatus('error', '無法存取攝影機：' + error.message);
+        
+        if (!isSecureContext()) {
+            showSecurityWarning();
+        } else {
+            updateWebcamStatus('error', '無法存取攝影機：' + getErrorMessage(error));
+        }
     }
 }
 

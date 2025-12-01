@@ -292,9 +292,26 @@
                         <div class="webcam-container">
                             <video id="webcam-video" autoplay playsinline muted></video>
                             <div id="webcam-overlay" class="webcam-overlay">
-                                <p>🎥 請點擊「開啟 Webcam」開始</p>
+                                <div style="text-align: center;">
+                                    <p>🎥 請點擊「開啟 Webcam」開始</p>
+                                    <p style="font-size: 0.8em; color: #aaa; margin-top: 10px;">
+                                        提示：Webcam 功能需要 HTTPS 或 localhost 連接
+                                    </p>
+                                </div>
                             </div>
                             <div id="capture-flash" class="capture-flash"></div>
+                        </div>
+                        
+                        <!-- 安全提示 -->
+                        <div id="security-notice" class="info-box" style="margin-top: 15px; font-size: 0.85em;">
+                            <p><strong>💡 提示：</strong></p>
+                            <p>如果 Webcam 無法開啟，可能是因為瀏覽器安全限制。</p>
+                            <p>您可以：</p>
+                            <ul style="margin: 5px 0; padding-left: 20px;">
+                                <li>使用「上傳圖片」功能</li>
+                                <li>使用 localhost 連接</li>
+                                <li>在 Chrome flags 中允許此網址</li>
+                            </ul>
                         </div>
                     </div>
                     
