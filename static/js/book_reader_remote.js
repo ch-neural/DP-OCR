@@ -130,20 +130,33 @@ function isSecureContext() {
 
 // 顯示安全上下文警告
 function showSecurityWarning() {
+    const currentUrl = location.protocol + '//' + location.host;
     const warningHtml = `
-        <div style="background: #5a2d2d; color: #ff6b6b; padding: 15px; border-radius: 8px; margin: 10px 0;">
-            <h4 style="margin: 0 0 10px 0;">⚠️ 瀏覽器安全限制</h4>
+        <div style="background: #5a2d2d; color: #ff6b6b; padding: 20px; border-radius: 8px; text-align: left;">
+            <h4 style="margin: 0 0 15px 0; font-size: 1.1em;">🔒 Webcam 需要安全連接</h4>
             <p style="margin: 5px 0; font-size: 0.9em;">
-                Webcam API 需要在 <strong>安全上下文</strong>（HTTPS 或 localhost）中才能使用。
+                目前連接：<code style="background: #333; padding: 2px 6px; border-radius: 3px;">${currentUrl}</code>
             </p>
-            <p style="margin: 10px 0 5px 0; font-size: 0.85em;">
-                <strong>解決方案：</strong>
+            <p style="margin: 10px 0; font-size: 0.9em;">
+                瀏覽器安全政策：Webcam 只能在 <strong>HTTPS</strong> 或 <strong>localhost</strong> 下使用。
             </p>
-            <ol style="margin: 5px 0; padding-left: 20px; font-size: 0.85em;">
-                <li>使用 <code>localhost</code> 或 <code>127.0.0.1</code> 連接</li>
-                <li>在 Chrome 網址列輸入 <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>，將此網址加入白名單</li>
-                <li>設定 HTTPS（使用 SSL 證書）</li>
-                <li>改用「上傳圖片」功能</li>
+            
+            <hr style="border: none; border-top: 1px solid #666; margin: 15px 0;">
+            
+            <p style="margin: 5px 0; font-size: 0.95em;"><strong>✅ 立即可用：</strong></p>
+            <p style="margin: 5px 0; font-size: 0.9em;">
+                👉 點擊上方「📁 上傳圖片」標籤，直接上傳照片進行 OCR
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #666; margin: 15px 0;">
+            
+            <p style="margin: 5px 0; font-size: 0.95em;"><strong>🔧 啟用 Webcam：</strong></p>
+            <ol style="margin: 5px 0; padding-left: 20px; font-size: 0.85em; line-height: 1.8;">
+                <li><strong>Chrome 白名單</strong>：網址列輸入<br>
+                    <code style="background: #333; padding: 2px 4px; border-radius: 3px; font-size: 0.85em;">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code><br>
+                    添加 <code>${currentUrl}</code> 並啟用，然後重啟 Chrome
+                </li>
+                <li><strong>使用 localhost</strong>：在伺服器本機用 <code>http://localhost:8502</code></li>
             </ol>
         </div>
     `;
@@ -154,29 +167,35 @@ function showSecurityWarning() {
         overlay.classList.remove('hidden');
     }
     
-    updateWebcamStatus('error', '❌ 需要 HTTPS 或 localhost');
+    updateWebcamStatus('error', '🔒 需要 HTTPS 或 localhost');
+    
+    // 自動切換到上傳模式的提示
+    console.log('💡 建議：點擊「📁 上傳圖片」標籤來上傳照片進行 OCR');
 }
 
 // 列舉可用的攝影機設備
 async function enumerateDevices() {
-    // 檢查是否支援 mediaDevices API
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error('此瀏覽器不支援 mediaDevices API');
-        elements.cameraSelect.innerHTML = '<option value="">瀏覽器不支援</option>';
+    // 檢查是否在安全上下文
+    if (!isSecureContext()) {
+        console.warn('非安全上下文 (HTTP)，Webcam API 被瀏覽器禁用');
+        console.warn('目前連接: ' + location.protocol + '//' + location.host);
+        console.warn('請使用 HTTPS 或 localhost 連接');
+        showSecurityWarning();
+        elements.cameraSelect.innerHTML = '<option value="">需要 HTTPS 或 localhost</option>';
         
-        if (!isSecureContext()) {
-            showSecurityWarning();
-        } else {
-            updateWebcamStatus('error', '瀏覽器不支援 Webcam API');
+        // 禁用 Webcam 按鈕
+        if (elements.toggleWebcamBtn) {
+            elements.toggleWebcamBtn.disabled = true;
+            elements.toggleWebcamBtn.textContent = '🔒 需要 HTTPS';
         }
         return;
     }
     
-    // 檢查安全上下文
-    if (!isSecureContext()) {
-        console.warn('非安全上下文，Webcam 功能可能受限');
-        showSecurityWarning();
-        elements.cameraSelect.innerHTML = '<option value="">需要 HTTPS</option>';
+    // 檢查是否支援 mediaDevices API
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('此瀏覽器不支援 mediaDevices API');
+        elements.cameraSelect.innerHTML = '<option value="">瀏覽器不支援</option>';
+        updateWebcamStatus('error', '瀏覽器不支援 Webcam API');
         return;
     }
     
