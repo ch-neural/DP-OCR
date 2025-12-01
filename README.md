@@ -74,23 +74,27 @@ curl http://localhost:5000/health
 
 閱讀機器人是一個基於 Raspberry Pi 的自動化 OCR 辨識系統。當偵測到 GPIO 觸發信號時，會自動拍攝照片並使用 DeepSeek-OCR API 進行文字辨識。
 
-本專案提供**兩種執行模式**，您可以根據需求選擇：
+本專案提供**三種執行模式**，您可以根據需求選擇：
 
 ---
 
-## 🎯 兩種執行模式
+## 🎯 三種執行模式
 
-| 特性 | Flask Web 版 | CLI 終端機版 |
-|------|-------------|-------------|
-| **檔案** | `book_reader_flask.py` | `book_reader.py` |
-| **界面** | 🌐 瀏覽器 Web 界面 | 💻 終端機 + OpenCV 視窗 |
-| **預覽方式** | 瀏覽器串流預覽 | LCD/OpenCV 視窗預覽 |
-| **GPIO 觸發** | ✅ 支援（SSE 推送到瀏覽器） | ✅ 支援（直接回調） |
-| **音檔播放** | ❌ 不支援 | ✅ 支援（pygame） |
-| **遠端操作** | ✅ 可從任何設備瀏覽器操作 | ❌ 需要連接顯示器 |
-| **適用場景** | 遠端監控、多設備操作 | 獨立運行、需要音效回饋 |
+| 特性 | Flask Web 版（伺服器相機） | Remote 遠端版（客戶端 Webcam） | CLI 終端機版 |
+|------|--------------------------|------------------------------|-------------|
+| **檔案** | `book_reader_flask.py` | `book_reader_remote.py` | `book_reader.py` |
+| **界面** | 🌐 瀏覽器 Web 界面 | 🌐 瀏覽器 Web 界面 | 💻 終端機 + OpenCV 視窗 |
+| **相機位置** | 📷 伺服器端（RPi 相機） | 📱 客戶端（電腦/手機 Webcam） | 📷 伺服器端（RPi 相機） |
+| **GPIO 觸發** | ✅ 支援 | ❌ 不支援 | ✅ 支援 |
+| **音檔播放** | ❌ 不支援 | ❌ 不支援 | ✅ 支援（pygame） |
+| **遠端操作** | ✅ 可遠端操作 | ✅ 可遠端操作 | ❌ 需要連接顯示器 |
+| **適用場景** | RPi + GPIO 按鈕觸發 | 用戶自帶設備拍攝 | 獨立運行、需要音效 |
 
-### 🌐 Flask Web 版（推薦遠端使用）
+---
+
+### 🌐 Flask Web 版（伺服器相機 + GPIO）
+
+使用 **Raspberry Pi 連接的相機**，支援 GPIO 按鈕觸發。
 
 ```bash
 cd example_bookReader
@@ -101,10 +105,39 @@ python book_reader_flask.py
 
 **特色**：
 - 在任何設備的瀏覽器中操作
-- 即時相機串流預覽
+- 即時相機串流預覽（伺服器端相機）
 - GPIO 按鈕觸發會自動在網頁上執行拍攝
 - OCR 結果歷史記錄
 - 可調整影像旋轉角度和解析度
+
+---
+
+### 📱 Remote 遠端版（客戶端 Webcam）- **新功能**
+
+使用 **用戶自己電腦/手機的 Webcam** 拍攝，無需在伺服器端連接相機。
+
+```bash
+cd example_bookReader
+python book_reader_remote.py
+```
+
+然後在任何設備的瀏覽器開啟：`http://<伺服器IP>:8502`
+
+**特色**：
+- 🎥 使用用戶自己的 Webcam（電腦或手機）
+- 📁 也可以直接上傳圖片檔案
+- 🔐 瀏覽器會請求攝影機權限
+- 🔄 支援鏡像模式切換
+- 🌐 伺服器不需要連接相機
+- ☁️ 適合雲端部署的 OCR 服務
+
+**適用場景**：
+- 伺服器沒有相機設備
+- 用戶想用自己的設備拍攝
+- 雲端部署的 OCR 服務
+- 多人共用的 OCR 系統
+
+---
 
 ### 💻 CLI 終端機版（推薦獨立運行）
 
@@ -452,20 +485,23 @@ sudo journalctl -u book-reader.service -f
 
 ```
 example_bookReader/
-├── book_reader_flask.py    # Flask Web 版主程式
-├── book_reader.py          # CLI 終端機版主程式
-├── gpio_button_service.py  # GPIO 按鈕服務（共用模組）
+├── book_reader_flask.py     # Flask Web 版主程式（伺服器相機）
+├── book_reader_remote.py    # Remote 遠端版主程式（客戶端 Webcam）
+├── book_reader.py           # CLI 終端機版主程式
+├── gpio_button_service.py   # GPIO 按鈕服務（共用模組）
 ├── openai_vision_service.py # OpenAI 圖像預分析服務
-├── config.ini              # 設定檔
-├── requirements.txt        # Python 依賴套件
-├── README.md               # 本說明文件
-├── templates/              # Flask HTML 模板
-│   └── book_reader.html
-├── static/                 # Flask 靜態資源
+├── config.ini               # 設定檔
+├── requirements.txt         # Python 依賴套件
+├── README.md                # 本說明文件
+├── templates/               # Flask HTML 模板
+│   ├── book_reader.html       # Flask 版模板
+│   └── book_reader_remote.html # Remote 版模板
+├── static/                  # Flask 靜態資源
 │   ├── css/
 │   │   └── book_reader.css
 │   └── js/
-│       └── book_reader.js
+│       ├── book_reader.js        # Flask 版 JavaScript
+│       └── book_reader_remote.js # Remote 版 JavaScript
 ├── README/                 # 詳細文檔目錄
 │   ├── INSTALLATION.md     # 詳細安裝指南
 │   ├── CONFIGURATION.md    # 設定檔說明
@@ -642,11 +678,19 @@ sudo apt install --reinstall python3-rpi-lgpio
 
 ---
 
-**版本**: 1.2.0  
+**版本**: 1.3.0  
 **更新日期**: 2025-12-01  
 **作者**: DeepSeek-OCR Team
 
 ### 更新紀錄
+
+- **v1.3.0** (2025-12-01)
+  - 🆕 新增 Remote 遠端版 (`book_reader_remote.py`)
+    - 用戶可使用自己電腦/手機的 Webcam 拍攝
+    - 支援瀏覽器拖放上傳圖片
+    - 適合雲端部署的 OCR 服務
+  - 新增 `book_reader_remote.html` 和 `book_reader_remote.js`
+  - 使用 `navigator.mediaDevices.getUserMedia()` API
 
 - **v1.2.0** (2025-12-01)
   - 新增 Flask Web 版 (`book_reader_flask.py`)，支援瀏覽器操作

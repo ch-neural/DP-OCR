@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📖 Book Reader OCR - Remote Camera</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/book_reader.css') }}">
+    <style>
+        /* 客戶端 Webcam 專用樣式 */
+        .webcam-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        #webcam-video {
+            width: 100%;
+            height: auto;
+            display: block;
+            transform: scaleX(-1); /* 鏡像翻轉 */
+        }
+        
+        #webcam-video.no-mirror {
+            transform: scaleX(1); /* 不鏡像 */
+        }
+        
+        .webcam-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            font-size: 1.2em;
+        }
+        
+        .webcam-overlay.hidden {
+            display: none;
+        }
+        
+        .webcam-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .webcam-status {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        
+        .webcam-status.connected {
+            background: #2d5a2d;
+            color: #90EE90;
+        }
+        
+        .webcam-status.disconnected {
+            background: #5a2d2d;
+            color: #ff6b6b;
+        }
+        
+        .webcam-status.connecting {
+            background: #5a5a2d;
+            color: #ffeb3b;
+        }
+        
+        /* 拍攝快閃效果 */
+        .capture-flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+        }
+        
+        .capture-flash.active {
+            opacity: 0.8;
+        }
+        
+        /* 設備選擇器 */
+        .device-selector {
+            margin-top: 15px;
+        }
+        
+        .device-selector select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #3a3a5a;
+            background: #2a2a4a;
+            color: #fff;
+            font-size: 0.95em;
+        }
+        
+        /* 上傳區域 */
+        .upload-area {
+            border: 2px dashed #4a4a6a;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            border-color: #6a6a8a;
+            background: rgba(100, 100, 150, 0.1);
+        }
+        
+        .upload-area.dragover {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        /* 隱藏的 file input */
+        #file-input {
+            display: none;
+        }
+        
+        /* 連接模式切換 */
+        .mode-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-tab {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #2a2a4a;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95em;
+        }
+        
+        .mode-tab:hover {
+            background: #3a3a5a;
+        }
+        
+        .mode-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        
+        .mode-content {
+            display: none;
+        }
+        
+        .mode-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左側固定 Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>📖 Book Reader</h1>
+                <p class="subtitle">Remote OCR System</p>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- 輸入模式切換 -->
+                <section class="sidebar-section">
+                    <h2>📷 輸入來源</h2>
+                    <div class="mode-tabs">
+                        <button id="mode-webcam" class="mode-tab active" onclick="switchMode('webcam')">
+                            🎥 Webcam
+                        </button>
+                        <button id="mode-upload" class="mode-tab" onclick="switchMode('upload')">
+                            📁 上傳圖片
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- Webcam 設定 -->
+                <section id="webcam-settings" class="sidebar-section mode-content active">
+                    <h2>🎥 Webcam 設定</h2>
+                    <div class="device-selector">
+                        <label for="camera-select" class="label">選擇攝影機:</label>
+                        <select id="camera-select" class="camera-select">
+                            <option value="">偵測中...</option>
+                        </select>
+                    </div>
+                    
+                    <label for="camera-resolution" class="label" style="margin-top: 15px;">解析度:</label>
+                    <select id="camera-resolution" class="camera-select">
+                        <option value="640x480">640x480</option>
+                        <option value="1280x720" selected>1280x720 (HD)</option>
+                        <option value="1920x1080">1920x1080 (Full HD)</option>
+                    </select>
+                    
+                    <label class="checkbox-label" style="margin-top: 15px;">
+                        <input type="checkbox" id="mirror-mode" checked>
+                        <span>鏡像模式（自拍模式）</span>
+                    </label>
+                    
+                    <div id="webcam-status" class="webcam-status disconnected">
+                        ⚫ 尚未連接
+                    </div>
+                    
+                    <button id="toggle-webcam-btn" class="btn btn-secondary" style="margin-top: 15px;">
+                        🎥 開啟 Webcam
+                    </button>
+                </section>
+                
+                <!-- 影像處理設定 -->
+                <section class="sidebar-section">
+                    <h2>⚙️ 影像處理</h2>
+                    <label for="image-rotation" class="label">旋轉角度:</label>
+                    <select id="image-rotation" class="camera-select">
+                        <option value="0" selected>0° (不旋轉)</option>
+                        <option value="90">90° (順時針)</option>
+                        <option value="180">180°</option>
+                        <option value="270">270° (逆時針)</option>
+                    </select>
+                    
+                    <label for="model-max-size" class="label" style="margin-top: 10px;">送交模型的長邊尺寸:</label>
+                    <select id="model-max-size" class="camera-select">
+                        <option value="480">480</option>
+                        <option value="640">640</option>
+                        <option value="960">960</option>
+                        <option value="1024" selected>1024</option>
+                        <option value="2048">2048</option>
+                    </select>
+                </section>
+                
+                <!-- OCR 設定 -->
+                <section class="sidebar-section">
+                    <h2>📝 OCR 設定</h2>
+                    <label for="ocr-prompt" class="label">自訂 Prompt:</label>
+                    <textarea 
+                        id="ocr-prompt" 
+                        class="prompt-textarea" 
+                        rows="4"
+                        placeholder="輸入 OCR prompt...">{{ default_prompt }}</textarea>
+                    <p class="help-text">此 prompt 會附加到每次 OCR 請求</p>
+                </section>
+                
+                <!-- 操作按鈕 -->
+                <section class="sidebar-section">
+                    <button id="capture-btn" class="btn btn-primary" disabled>
+                        📸 拍攝 & OCR
+                    </button>
+                </section>
+                
+                <!-- OCR 結果操作 -->
+                <section class="sidebar-section">
+                    <button id="clear-results-btn" class="btn btn-danger">
+                        🗑️ 清除所有結果
+                    </button>
+                </section>
+            </div>
+        </aside>
+        
+        <!-- 主內容區域 -->
+        <main class="main-content">
+            <div class="content-header">
+                <h2>📷 即時預覽</h2>
+            </div>
+            
+            <div class="content-grid">
+                <!-- 左側：相機預覽 / 上傳區域 -->
+                <div class="preview-section">
+                    <!-- Webcam 模式 -->
+                    <div id="webcam-mode" class="mode-content active">
+                        <div class="webcam-container">
+                            <video id="webcam-video" autoplay playsinline muted></video>
+                            <div id="webcam-overlay" class="webcam-overlay">
+                                <p>🎥 請點擊「開啟 Webcam」開始</p>
+                            </div>
+                            <div id="capture-flash" class="capture-flash"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 上傳模式 -->
+                    <div id="upload-mode" class="mode-content">
+                        <div id="upload-area" class="upload-area">
+                            <div class="upload-icon">📁</div>
+                            <p>拖放圖片至此處<br>或點擊選擇檔案</p>
+                            <input type="file" id="file-input" accept="image/*">
+                        </div>
+                        <div id="upload-preview" class="preview-container" style="display: none; margin-top: 20px;">
+                            <img id="upload-image" src="" alt="上傳的圖片" style="max-width: 100%; border-radius: 8px;">
+                        </div>
+                    </div>
+                    
+                    <!-- 拍攝的照片顯示區域 -->
+                    <div id="captured-image-area" class="captured-image-area" style="display: none;">
+                        <div class="captured-image-header">
+                            <h3>📸 處理的照片</h3>
+                        </div>
+                        <div class="captured-image-container">
+                            <img id="captured-image" src="" alt="處理的照片">
+                        </div>
+                    </div>
+                    
+                    <!-- OCR 結果顯示區域 -->
+                    <div id="ocr-result-area" class="ocr-result-area" style="display: none;">
+                        <div class="result-header">
+                            <h3>OCR 結果</h3>
+                            <button id="close-result-btn" class="btn-close">×</button>
+                        </div>
+                        <div id="ocr-result-content" class="result-content"></div>
+                    </div>
+                </div>
+                
+                <!-- 右側：OCR 結果歷史 -->
+                <div class="history-section">
+                    <div class="section-header">
+                        <h2>📋 OCR 結果歷史</h2>
+                    </div>
+                    <div id="results-history" class="results-history">
+                        <div class="empty-state">
+                            <p>尚無 OCR 結果</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- 載入指示器 -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">處理中...</p>
+    </div>
+    
+    <!-- Canvas 用於拍照（隱藏） -->
+    <canvas id="capture-canvas" style="display: none;"></canvas>
+    
+    <script src="{{ url_for('static', filename='js/book_reader_remote.js') }}?v={{ version }}"></script>
+</body>
+</html>
+
