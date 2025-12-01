@@ -1,8 +1,10 @@
 // Book Reader Flask - JavaScript
 
 let cameraEventSource = null;
+let gpioEventSource = null;  // GPIO 事件源
 let isProcessing = false;
 let currentFrame = null;
+let gpioEnabled = false;  // GPIO 功能是否啟用
 
 // DOM 元素
 const elements = {
@@ -71,7 +73,165 @@ document.addEventListener('DOMContentLoaded', function() {
         currentAppliedRotation = initialRotation;
         updatePreviewRotation(initialRotation);
     }
+    
+    // 初始化 GPIO 事件監聽
+    initGPIOEventListener();
 });
+
+// 初始化 GPIO 事件監聽
+async function initGPIOEventListener() {
+    // 先檢查 GPIO 服務狀態
+    try {
+        const response = await fetch('/api/gpio/status');
+        const data = await response.json();
+        
+        if (data.available) {
+            gpioEnabled = true;
+            console.log('✅ GPIO 服務可用:', data.status);
+            startGPIOEventStream();
+        } else {
+            gpioEnabled = false;
+            console.log('ℹ️ GPIO 服務不可用:', data.message);
+        }
+    } catch (error) {
+        gpioEnabled = false;
+        console.log('ℹ️ 無法檢查 GPIO 服務狀態:', error.message);
+    }
+}
+
+// 開始 GPIO 事件串流
+function startGPIOEventStream() {
+    if (gpioEventSource) {
+        gpioEventSource.close();
+        gpioEventSource = null;
+    }
+    
+    console.log('🔘 開始監聯 GPIO 按鈕事件...');
+    gpioEventSource = new EventSource('/api/gpio/events');
+    
+    gpioEventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        
+        switch (data.type) {
+            case 'connected':
+                console.log('✅ GPIO 事件監聽已連接:', data.message);
+                showGPIOStatus('已連接', 'success');
+                break;
+                
+            case 'heartbeat':
+                // 心跳訊息，靜默處理
+                break;
+                
+            case 'gpio_button_click':
+                console.log('🔘 收到 GPIO 按鈕點擊事件:', data.timestamp);
+                handleGPIOButtonClick();
+                break;
+                
+            default:
+                console.log('📩 收到 GPIO 事件:', data);
+        }
+    };
+    
+    gpioEventSource.onerror = function(error) {
+        console.error('❌ GPIO 事件串流錯誤:', error);
+        showGPIOStatus('連接中斷', 'error');
+        
+        // 嘗試重新連接
+        setTimeout(() => {
+            if (gpioEnabled && (!gpioEventSource || gpioEventSource.readyState === EventSource.CLOSED)) {
+                console.log('🔄 嘗試重新連接 GPIO 事件串流...');
+                startGPIOEventStream();
+            }
+        }, 5000);
+    };
+    
+    gpioEventSource.onopen = function() {
+        console.log('✅ GPIO 事件串流已開啟');
+    };
+}
+
+// 停止 GPIO 事件串流
+function stopGPIOEventStream() {
+    if (gpioEventSource) {
+        gpioEventSource.close();
+        gpioEventSource = null;
+        console.log('🔘 GPIO 事件串流已停止');
+    }
+}
+
+// 處理 GPIO 按鈕點擊
+function handleGPIOButtonClick() {
+    console.log('🔘 處理 GPIO 按鈕點擊事件');
+    
+    // 顯示視覺反饋
+    showGPIOTriggerFeedback();
+    
+    // 檢查是否正在處理中
+    if (isProcessing) {
+        console.log('⚠️ 正在處理中，忽略此次 GPIO 觸發');
+        return;
+    }
+    
+    // 檢查是否有可用的相機畫面
+    if (!currentFrame) {
+        console.log('⚠️ 沒有可用的相機畫面，嘗試啟用預覽');
+        
+        // 如果預覽未啟用，嘗試啟用
+        if (!elements.enablePreview.checked) {
+            elements.enablePreview.checked = true;
+            startCameraStream();
+            
+            // 等待一段時間讓相機初始化後再觸發拍攝
+            setTimeout(() => {
+                if (currentFrame) {
+                    handleCapture();
+                } else {
+                    console.log('❌ 相機初始化失敗，無法拍攝');
+                    alert('GPIO 按鈕觸發失敗：相機畫面不可用\n請檢查相機連接');
+                }
+            }, 2000);
+            return;
+        }
+        
+        console.log('❌ 預覽已啟用但沒有畫面，可能相機有問題');
+        alert('GPIO 按鈕觸發失敗：相機畫面不可用\n請檢查相機連接');
+        return;
+    }
+    
+    // 觸發拍攝 & OCR
+    console.log('📸 GPIO 觸發拍攝 & OCR');
+    handleCapture();
+}
+
+// 顯示 GPIO 觸發視覺反饋
+function showGPIOTriggerFeedback() {
+    // 讓拍攝按鈕閃爍
+    const captureBtn = elements.captureBtn;
+    if (captureBtn) {
+        captureBtn.classList.add('gpio-triggered');
+        captureBtn.style.animation = 'gpioTrigger 0.5s ease-in-out';
+        
+        setTimeout(() => {
+            captureBtn.classList.remove('gpio-triggered');
+            captureBtn.style.animation = '';
+        }, 500);
+    }
+    
+    // 在控制台顯示醒目訊息
+    console.log('%c🔘 GPIO 按鈕觸發！', 'color: #00ff00; font-size: 16px; font-weight: bold;');
+}
+
+// 顯示 GPIO 狀態
+function showGPIOStatus(status, type) {
+    // 可以在 UI 上顯示 GPIO 連接狀態
+    // 目前只在控制台顯示
+    const styles = {
+        'success': 'color: #00ff00;',
+        'error': 'color: #ff0000;',
+        'info': 'color: #0099ff;'
+    };
+    console.log(`%c🔘 GPIO 狀態: ${status}`, styles[type] || styles['info']);
+}
 
 // 事件監聽器
 function initializeEventListeners() {
@@ -945,5 +1105,6 @@ function escapeHtml(text) {
 // 頁面卸載時清理
 window.addEventListener('beforeunload', function() {
     stopCameraStream();
+    stopGPIOEventStream();
 });
 

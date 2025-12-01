@@ -72,15 +72,63 @@ curl http://localhost:5000/health
 
 ## 📖 簡介
 
-閱讀機器人是一個基於 Raspberry Pi 的自動化 OCR 辨識系統。當偵測到 GPIO 觸發信號時，會自動拍攝照片並使用 DeepSeek-OCR API 進行文字辨識，然後播放對應的語音回饋。
+閱讀機器人是一個基於 Raspberry Pi 的自動化 OCR 辨識系統。當偵測到 GPIO 觸發信號時，會自動拍攝照片並使用 DeepSeek-OCR API 進行文字辨識。
+
+本專案提供**兩種執行模式**，您可以根據需求選擇：
+
+---
+
+## 🎯 兩種執行模式
+
+| 特性 | Flask Web 版 | CLI 終端機版 |
+|------|-------------|-------------|
+| **檔案** | `book_reader_flask.py` | `book_reader.py` |
+| **界面** | 🌐 瀏覽器 Web 界面 | 💻 終端機 + OpenCV 視窗 |
+| **預覽方式** | 瀏覽器串流預覽 | LCD/OpenCV 視窗預覽 |
+| **GPIO 觸發** | ✅ 支援（SSE 推送到瀏覽器） | ✅ 支援（直接回調） |
+| **音檔播放** | ❌ 不支援 | ✅ 支援（pygame） |
+| **遠端操作** | ✅ 可從任何設備瀏覽器操作 | ❌ 需要連接顯示器 |
+| **適用場景** | 遠端監控、多設備操作 | 獨立運行、需要音效回饋 |
+
+### 🌐 Flask Web 版（推薦遠端使用）
+
+```bash
+cd example_bookReader
+python book_reader_flask.py
+```
+
+然後在瀏覽器開啟：`http://<Raspberry Pi IP>:8502`
+
+**特色**：
+- 在任何設備的瀏覽器中操作
+- 即時相機串流預覽
+- GPIO 按鈕觸發會自動在網頁上執行拍攝
+- OCR 結果歷史記錄
+- 可調整影像旋轉角度和解析度
+
+### 💻 CLI 終端機版（推薦獨立運行）
+
+```bash
+cd example_bookReader
+python book_reader.py
+```
+
+**特色**：
+- 無需瀏覽器，直接在終端機運行
+- 可選的 LCD/OpenCV 視窗預覽
+- GPIO 按鈕觸發拍照 + OCR
+- OCR 成功/失敗時播放音效
+- 適合無頭（headless）運行
+
+---
 
 ## ✨ 功能特色
 
-- ⚡ **GPIO 觸發**: 偵測 GPIO17 信號自動啟動辨識流程
+- ⚡ **GPIO 觸發**: 偵測 GPIO17 按鈕點擊（按下→釋放）自動啟動辨識流程
 - 📷 **USB 攝影機**: 自動拍攝高解析度照片
-- 🖥️ **LCD 預覽**: 可選顯示即時攝影機畫面，支援自動/手動拍照模式
+- 🖥️ **雙模式預覽**: Web 瀏覽器串流或 LCD/OpenCV 視窗
 - 🔍 **OCR 辨識**: 透過 DeepSeek-OCR API 進行高準確度文字辨識
-- 🔊 **語音回饋**: 根據辨識結果播放成功或失敗音檔
+- 🔊 **語音回饋**: CLI 版支援根據辨識結果播放成功或失敗音檔
 - ⚙️ **彈性設定**: 所有參數皆可透過設定檔調整
 - 📝 **完整日誌**: 記錄所有操作過程，方便除錯
 
@@ -294,23 +342,55 @@ cd /path/to/deepseek-ocr-api
 python app.py
 ```
 
-#### 2. 啟動閱讀機器人
+#### 2. 選擇執行模式
+
+---
+
+### 🌐 方式 A：Flask Web 版（推薦）
+
+```bash
+cd example_bookReader
+python3 book_reader_flask.py
+```
+
+啟動後：
+1. 在瀏覽器開啟 `http://<Raspberry Pi IP>:8502`
+2. 網頁會顯示相機即時預覽
+3. **GPIO 按鈕觸發**：按下 GPIO17 按鈕，網頁會自動執行「拍攝 & OCR」
+4. **手動觸發**：也可以直接點擊網頁上的「📸 拍攝 & OCR」按鈕
+5. OCR 結果會顯示在網頁上，並記錄在歷史中
+
+**GPIO 按鈕接線**：
+```
+按鈕一端 -> GPIO17 (Pin 11)
+按鈕另一端 -> GND
+```
+
+---
+
+### 💻 方式 B：CLI 終端機版
 
 ```bash
 cd example_bookReader
 python3 book_reader.py
 ```
 
-3. 按下並釋放觸發按鈕（連接到 GPIO17），系統會：
-   - （可選）顯示攝影機預覽畫面
+啟動後：
+1. 終端機會顯示「等待 GPIO17 按鈕點擊...」
+2. 按下並釋放 GPIO17 按鈕，系統會：
+   - （可選）顯示 LCD/OpenCV 預覽畫面
    - 拍攝照片
    - 送到 API 辨識
    - 在終端機顯示辨識結果
-   - 播放對應的音檔
+   - 播放對應的音檔（成功/失敗）
 
 **注意**：系統會偵測完整的按鈕點擊（按下→釋放），請確保按鈕按下時間在 0.1-5 秒之間
 
-4. 按 `Ctrl+C` 停止程式
+---
+
+#### 3. 停止程式
+
+按 `Ctrl+C` 停止程式
 
 ### 背景執行
 
@@ -372,16 +452,26 @@ sudo journalctl -u book-reader.service -f
 
 ```
 example_bookReader/
-├── book_reader.py          # 主程式
+├── book_reader_flask.py    # Flask Web 版主程式
+├── book_reader.py          # CLI 終端機版主程式
+├── gpio_button_service.py  # GPIO 按鈕服務（共用模組）
+├── openai_vision_service.py # OpenAI 圖像預分析服務
 ├── config.ini              # 設定檔
 ├── requirements.txt        # Python 依賴套件
 ├── README.md               # 本說明文件
+├── templates/              # Flask HTML 模板
+│   └── book_reader.html
+├── static/                 # Flask 靜態資源
+│   ├── css/
+│   │   └── book_reader.css
+│   └── js/
+│       └── book_reader.js
 ├── README/                 # 詳細文檔目錄
 │   ├── INSTALLATION.md     # 詳細安裝指南
 │   ├── CONFIGURATION.md    # 設定檔說明
 │   ├── TROUBLESHOOTING.md  # 疑難排解
 │   └── ERROR_MESSAGES.md   # 錯誤訊息說明
-├── voices/                 # 音檔目錄
+├── voices/                 # 音檔目錄（CLI 版使用）
 │   ├── 看完了1.mp3
 │   ├── 看完了2.mp3
 │   ├── 看不懂1.mp3
@@ -552,7 +642,24 @@ sudo apt install --reinstall python3-rpi-lgpio
 
 ---
 
-**版本**: 1.0.0  
-**更新日期**: 2025-11-11  
+**版本**: 1.2.0  
+**更新日期**: 2025-12-01  
 **作者**: DeepSeek-OCR Team
+
+### 更新紀錄
+
+- **v1.2.0** (2025-12-01)
+  - 新增 Flask Web 版 (`book_reader_flask.py`)，支援瀏覽器操作
+  - GPIO 按鈕觸發整合到 Web 界面（SSE 即時推送）
+  - 重構 CLI 版 (`book_reader.py`)，使用共用的 GPIO 服務
+  - 新增 `gpio_button_service.py` 共用模組
+  - 支援 gpiod 2.x API（Raspberry Pi 5 相容）
+  - 移除 Streamlit 版本
+
+- **v1.1.0** (2025-11-11)
+  - 改進按鈕點擊偵測機制
+  - 統一使用 rpi-lgpio
+
+- **v1.0.0** (2025-11-10)
+  - 初始版本
 

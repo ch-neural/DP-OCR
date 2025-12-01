@@ -79,36 +79,24 @@ GPIO_BACKEND = None
 def _setup_lgpio_environment():
     """設置 lgpio 庫的環境變數，解決 systemd 服務運行時的通知文件創建問題"""
     try:
-        # 獲取當前腳本所在目錄
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # 優先使用用戶家目錄（最可靠）
+        home_dir = os.path.expanduser('~')
+        if os.access(home_dir, os.W_OK):
+            os.chdir(home_dir)
+            return
         
-        # 嘗試在腳本目錄創建臨時文件以測試寫入權限
-        test_file = os.path.join(script_dir, '.lgpio_test')
-        try:
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
-            # 如果成功，設置工作目錄為腳本目錄
+        # 嘗試 /tmp 目錄
+        import tempfile
+        temp_dir = tempfile.gettempdir()
+        if os.access(temp_dir, os.W_OK):
+            os.chdir(temp_dir)
+            return
+        
+        # 最後嘗試腳本目錄
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if os.access(script_dir, os.W_OK):
             os.chdir(script_dir)
-        except (OSError, PermissionError):
-            # 如果腳本目錄不可寫，嘗試使用 /tmp 或用戶主目錄
-            import tempfile
-            temp_dir = tempfile.gettempdir()
-            try:
-                # 測試 /tmp 是否可寫
-                test_file = os.path.join(temp_dir, '.lgpio_test')
-                with open(test_file, 'w') as f:
-                    f.write('test')
-                os.remove(test_file)
-                # 設置工作目錄為 /tmp
-                os.chdir(temp_dir)
-            except (OSError, PermissionError):
-                # 最後嘗試用戶主目錄
-                home_dir = os.path.expanduser('~')
-                if os.access(home_dir, os.W_OK):
-                    os.chdir(home_dir)
     except Exception:
-        # 如果所有嘗試都失敗，繼續使用當前目錄
         pass
 
 # 優先嘗試 rpi-lgpio（如果已安裝）
@@ -247,7 +235,7 @@ class GPIOButtonTester:
     def _setup_gpio(self):
         """設定 GPIO"""
         if GPIO_BACKEND == 'gpiod':
-            # 使用 gpiod (Raspberry Pi 5)
+            # 使用 gpiod 2.x API (Raspberry Pi 5)
             # Raspberry Pi 5 使用 gpiochip4
             chip_paths = ['/dev/gpiochip4', '/dev/gpiochip0', 'gpiochip4', 'gpiochip0']
             chip = None
@@ -271,60 +259,28 @@ class GPIOButtonTester:
             try:
                 self.chip = chip
                 
-                # 根據診斷資訊，此版本的 gpiod 使用 request_lines API
-                # 首先需要將 GPIO ID 轉換為 line offset
-                try:
-                    # 方法 1: 使用 line_offset_from_id 轉換 GPIO ID 到 offset
-                    line_offset = self.chip.line_offset_from_id(self.gpio_pin)
-                except AttributeError:
-                    # 如果沒有 line_offset_from_id，直接使用 GPIO ID 作為 offset
-                    line_offset = self.gpio_pin
+                # gpiod 2.x API
+                from gpiod.line import Direction, Bias
                 
-                # 使用 request_lines 請求 GPIO line
-                # 根據 gpiod API，request_lines 需要 LineRequest 配置
-                try:
-                    # 建立 LineRequest 配置
-                    request = gpiod.LineRequest()
-                    request.consumer = 'GPIOButtonTester'
-                    request.request_type = gpiod.LINE_REQ_DIR_IN
-                    request.flags = gpiod.LINE_REQ_FLAG_BIAS_PULL_UP
-                    
-                    # 使用 request_lines 請求 line（返回 Line 物件）
-                    lines = self.chip.request_lines([line_offset], request)
-                    if lines and len(lines) > 0:
-                        self.gpio_line = lines[0]
-                    else:
-                        raise RuntimeError("request_lines 返回空列表")
-                except (AttributeError, TypeError) as e:
-                    # 如果 LineRequest 不存在，嘗試其他方式
-                    try:
-                        # 嘗試直接使用 request_lines 並傳入字典配置
-                        lines = self.chip.request_lines(
-                            [line_offset],
-                            consumer='GPIOButtonTester',
-                            type=gpiod.LINE_REQ_DIR_IN,
-                            flags=gpiod.LINE_REQ_FLAG_BIAS_PULL_UP
-                        )
-                        if lines and len(lines) > 0:
-                            self.gpio_line = lines[0]
-                        else:
-                            raise RuntimeError("request_lines 返回空列表")
-                    except (AttributeError, TypeError) as e2:
-                        # 如果所有方法都失敗，提供清楚的錯誤訊息
-                        available_methods = [m for m in dir(self.chip) if not m.startswith('_') and callable(getattr(self.chip, m, None))]
-                        methods_str = ', '.join(sorted(available_methods)[:10])
-                        
-                        raise RuntimeError(
-                            f"gpiod API 不相容。無法請求 GPIO line {self.gpio_pin}。\n\n"
-                            f"可用的 Chip 方法: {methods_str}...\n\n"
-                            f"錯誤詳情: {e2}\n\n"
-                            "建議使用 rpi-lgpio（RPi.GPIO 的替代方案）：\n"
-                            "  sudo apt-get install python3-rpi-lgpio\n"
-                            "  或: pip install rpi-lgpio\n\n"
-                            "rpi-lgpio 已安裝，程式應該會自動使用它。"
-                        )
+                # 創建 LineSettings
+                line_settings = gpiod.LineSettings(
+                    direction=Direction.INPUT,
+                    bias=Bias.PULL_UP
+                )
                 
-                print(f"✅ GPIO{self.gpio_pin} 設定完成（gpiod，使用 {chip_path_used}）")
+                # 創建配置字典 {offset: settings}
+                config = {self.gpio_pin: line_settings}
+                
+                # 請求 GPIO lines
+                self.gpio_line = self.chip.request_lines(
+                    consumer="GPIOButtonTester",
+                    config=config
+                )
+                
+                print(f"✅ GPIO{self.gpio_pin} 設定完成（gpiod 2.x，使用 {chip_path_used}）")
+            except ImportError as e:
+                print(f"❌ gpiod 模組導入失敗: {e}")
+                raise RuntimeError("gpiod 2.x API 不可用，請安裝 rpi-lgpio")
             except Exception as e:
                 print(f"❌ GPIO{self.gpio_pin} 設定失敗: {e}")
                 print(f"   嘗試的 chip 路徑: {chip_path_used}")
@@ -364,18 +320,22 @@ class GPIOButtonTester:
             bool: True 表示按鈕按下（LOW），False 表示按鈕未按下（HIGH）
         """
         if GPIO_BACKEND == 'gpiod':
-            # gpiod: 0 = LOW (按下), 1 = HIGH (未按下)
-            # 因為我們使用 PULL_UP，按下時會是 LOW (0)
+            # gpiod 2.x API: 使用 get_value(offset) 方法
             try:
-                # 嘗試 get_value() 方法
-                return self.gpio_line.get_value() == 0
-            except AttributeError:
+                from gpiod.line import Value
+                value = self.gpio_line.get_value(self.gpio_pin)
+                # Value.INACTIVE = LOW (按下), Value.ACTIVE = HIGH (未按下)
+                return value == Value.INACTIVE
+            except ImportError:
+                # 舊版 API 兼容
                 try:
-                    # 嘗試 value 屬性
-                    return self.gpio_line.value == 0
-                except AttributeError:
-                    # 嘗試讀取方法
-                    return self.gpio_line.read() == 0
+                    value = self.gpio_line.get_value(self.gpio_pin)
+                    return value == 0
+                except Exception:
+                    return False
+            except Exception as e:
+                print(f"gpiod 讀取失敗: {e}")
+                return False
         elif GPIO_BACKEND in ('RPi.GPIO', 'rpi-lgpio'):
             # RPi.GPIO / rpi-lgpio: GPIO.LOW = 按下, GPIO.HIGH = 未按下
             return GPIO.input(self.gpio_pin) == GPIO.LOW
@@ -461,10 +421,20 @@ class GPIOButtonTester:
         self.running = False
         
         if GPIO_BACKEND == 'gpiod':
-            if hasattr(self, 'gpio_line'):
-                self.gpio_line.release()
-            if hasattr(self, 'chip'):
-                self.chip.close()
+            if hasattr(self, 'gpio_line') and self.gpio_line:
+                try:
+                    # gpiod 2.x: LineRequest 物件會自動釋放，但可以顯式關閉
+                    if hasattr(self.gpio_line, 'release'):
+                        self.gpio_line.release()
+                    elif hasattr(self.gpio_line, 'close'):
+                        self.gpio_line.close()
+                except Exception:
+                    pass
+            if hasattr(self, 'chip') and self.chip:
+                try:
+                    self.chip.close()
+                except Exception:
+                    pass
             print("✅ GPIO 資源已釋放（gpiod）")
         
         elif GPIO_BACKEND in ('RPi.GPIO', 'rpi-lgpio'):

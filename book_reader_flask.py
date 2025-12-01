@@ -20,9 +20,11 @@ from flask import Flask, render_template, request, jsonify, Response, session
 from flask_cors import CORS
 from dotenv import load_dotenv
 import threading
+import queue
 from typing import Dict, List, Optional
 import base64
 import gc
+import atexit
 
 # 載入 .env 環境變數
 load_dotenv()
@@ -36,9 +38,21 @@ except ImportError as e:
     print(f"警告: 無法匯入 OpenAI Vision 服務 ({e})")
     print("將跳過圖像預分析功能")
 
+# 嘗試匯入 GPIO 按鈕服務
+try:
+    from gpio_button_service import GPIOButtonService, init_gpio_service, cleanup_gpio_service, get_gpio_service
+    GPIO_SERVICE_AVAILABLE = True
+except ImportError as e:
+    GPIO_SERVICE_AVAILABLE = False
+    print(f"警告: 無法匯入 GPIO 按鈕服務 ({e})")
+    print("GPIO 按鈕觸發功能將不可用")
+
+# 取得腳本所在目錄，用於設定 Flask 的 template 和 static 目錄
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+
 app = Flask(__name__, 
-            template_folder='templates',
-            static_folder='static')
+            template_folder=os.path.join(_script_dir, 'templates'),
+            static_folder=os.path.join(_script_dir, 'static'))
 app.secret_key = os.urandom(24)  # 用於 session
 CORS(app)
 
@@ -48,6 +62,13 @@ CORS(app)
 camera_cap = None
 current_camera_device = None  # 追蹤當前使用的相機設備 ID
 camera_lock = threading.Lock()
+
+# GPIO 按鈕事件隊列（用於 SSE 推送）
+gpio_event_queues: List[queue.Queue] = []
+gpio_event_lock = threading.Lock()
+
+# GPIO 服務實例
+gpio_service = None
 
 
 class BookReaderFlask:
@@ -60,15 +81,23 @@ class BookReaderFlask:
         Args:
             config_file: 設定檔路徑
         """
+        # 取得腳本所在目錄
+        self.script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 如果 config_file 不是絕對路徑，則相對於腳本目錄
+        if not os.path.isabs(config_file):
+            config_file = os.path.join(self.script_dir, config_file)
+        
         self.config = self._load_config(config_file)
         self._setup_logging()
         self._setup_camera()
         self._setup_api()
         self._setup_openai_vision()
+        self._setup_gpio()
         self._create_directories()
         
-        # OCR 結果存儲文件
-        self.ocr_results_file = 'ocr_results.json'
+        # OCR 結果存儲文件（使用腳本目錄的相對路徑）
+        self.ocr_results_file = os.path.join(self.script_dir, 'ocr_results.json')
         self._load_ocr_results()
         
         self.logger.info("閱讀機器人 Flask 界面初始化完成")
@@ -90,6 +119,10 @@ class BookReaderFlask:
         log_level = self.config.get('LOGGING', 'log_level', fallback='INFO')
         log_file = self.config.get('LOGGING', 'log_file', fallback='logs/book_reader.log')
         console_output = self.config.getboolean('LOGGING', 'console_output', fallback=True)
+        
+        # 如果日誌檔案路徑是相對路徑，則相對於腳本目錄
+        if not os.path.isabs(log_file):
+            log_file = os.path.join(self.script_dir, log_file)
         
         # 建立日誌目錄
         log_dir = os.path.dirname(log_file)
@@ -128,6 +161,10 @@ class BookReaderFlask:
         self.capture_delay = self.config.getfloat('CAMERA', 'capture_delay', fallback=0.5)
         self.save_captured_image = self.config.getboolean('CAMERA', 'save_captured_image', fallback=True)
         self.image_save_path = self.config.get('CAMERA', 'image_save_path', fallback='captured_images')
+        
+        # 如果圖片儲存路徑是相對路徑，則相對於腳本目錄
+        if not os.path.isabs(self.image_save_path):
+            self.image_save_path = os.path.join(self.script_dir, self.image_save_path)
         
         self.logger.info(f"攝影機設定完成: 裝置 {self.camera_device}, 解析度 {self.frame_width}x{self.frame_height}")
     
@@ -169,6 +206,67 @@ class BookReaderFlask:
         )
         
         self.logger.info("✅ OpenAI 圖像預分析功能已啟用")
+    
+    def _setup_gpio(self):
+        """設定 GPIO 按鈕服務"""
+        global gpio_service
+        
+        if not GPIO_SERVICE_AVAILABLE:
+            self.logger.info("GPIO 服務不可用，跳過初始化")
+            return
+        
+        # 讀取 GPIO 設定
+        gpio_pin = self.config.getint('GPIO', 'trigger_pin', fallback=17)
+        debounce_delay = self.config.getfloat('GPIO', 'debounce_delay', fallback=0.2)
+        simulation_mode = self.config.getboolean('GPIO', 'simulation_mode', fallback=False)
+        simulation_interval = self.config.getfloat('GPIO', 'simulation_trigger_interval', fallback=10.0)
+        
+        # 初始化 GPIO 服務
+        gpio_service = init_gpio_service(
+            gpio_pin=gpio_pin,
+            debounce_delay=debounce_delay,
+            simulation_mode=simulation_mode,
+            simulation_interval=simulation_interval
+        )
+        
+        # 註冊按鈕點擊回調
+        gpio_service.on_click(self._on_gpio_button_click)
+        
+        # 啟動服務
+        gpio_service.start()
+        
+        # 註冊程式退出時的清理
+        atexit.register(cleanup_gpio_service)
+        
+        mode_str = "模擬模式" if simulation_mode else "GPIO 模式"
+        self.logger.info(f"✅ GPIO 按鈕服務已啟用 (GPIO{gpio_pin}, {mode_str})")
+    
+    def _on_gpio_button_click(self):
+        """GPIO 按鈕點擊回調函數"""
+        global gpio_event_queues
+        
+        self.logger.info("🔘 GPIO 按鈕被點擊，發送事件到所有連接的客戶端")
+        
+        event_data = {
+            'type': 'gpio_button_click',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # 將事件發送到所有已連接的客戶端隊列
+        with gpio_event_lock:
+            dead_queues = []
+            for q in gpio_event_queues:
+                try:
+                    q.put_nowait(event_data)
+                except queue.Full:
+                    # 隊列已滿，標記為待移除
+                    dead_queues.append(q)
+            
+            # 移除失效的隊列
+            for q in dead_queues:
+                gpio_event_queues.remove(q)
+        
+        self.logger.info(f"事件已發送到 {len(gpio_event_queues)} 個客戶端")
     
     def _create_directories(self):
         """建立必要的目錄"""
@@ -670,6 +768,80 @@ def camera_stream():
     return Response(generate(), mimetype='text/event-stream')
 
 
+@app.route('/api/gpio/events')
+def gpio_events():
+    """
+    GPIO 按鈕事件串流（Server-Sent Events）
+    
+    當 GPIO 按鈕被點擊時，會透過此端點推送事件到前端
+    前端接收到事件後，自動觸發「拍攝 & OCR」功能
+    """
+    def generate():
+        # 為此客戶端創建一個新的事件隊列
+        client_queue = queue.Queue(maxsize=10)
+        
+        with gpio_event_lock:
+            gpio_event_queues.append(client_queue)
+        
+        reader.logger.info(f"GPIO 事件客戶端已連接，當前連接數: {len(gpio_event_queues)}")
+        
+        try:
+            # 發送初始連接確認
+            yield f"data: {json.dumps({'type': 'connected', 'message': 'GPIO 事件監聽已啟動'})}\n\n"
+            
+            while True:
+                try:
+                    # 等待事件（阻塞，設置超時以便能夠檢測客戶端斷開）
+                    event_data = client_queue.get(timeout=30)
+                    yield f"data: {json.dumps(event_data)}\n\n"
+                except queue.Empty:
+                    # 發送心跳保持連接
+                    yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+        except GeneratorExit:
+            reader.logger.info("GPIO 事件客戶端已斷開連接")
+        finally:
+            # 移除客戶端隊列
+            with gpio_event_lock:
+                if client_queue in gpio_event_queues:
+                    gpio_event_queues.remove(client_queue)
+            reader.logger.info(f"GPIO 事件客戶端已清理，剩餘連接數: {len(gpio_event_queues)}")
+    
+    return Response(generate(), mimetype='text/event-stream')
+
+
+@app.route('/api/gpio/status', methods=['GET'])
+def gpio_status():
+    """獲取 GPIO 服務狀態"""
+    if not GPIO_SERVICE_AVAILABLE or gpio_service is None:
+        return jsonify({
+            'available': False,
+            'message': 'GPIO 服務不可用'
+        })
+    
+    return jsonify({
+        'available': True,
+        'status': gpio_service.get_status()
+    })
+
+
+@app.route('/api/gpio/test', methods=['POST'])
+def gpio_test_trigger():
+    """
+    測試 GPIO 觸發（用於調試）
+    發送一個模擬的按鈕點擊事件
+    """
+    if not GPIO_SERVICE_AVAILABLE:
+        return jsonify({'error': 'GPIO 服務不可用'}), 400
+    
+    reader.logger.info("收到 GPIO 測試觸發請求")
+    reader._on_gpio_button_click()
+    
+    return jsonify({
+        'success': True,
+        'message': 'GPIO 測試事件已發送'
+    })
+
+
 @app.route('/api/camera/list', methods=['GET'])
 def get_camera_list():
     """獲取可用相機列表"""
@@ -844,5 +1016,11 @@ def clear_ocr_results():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8502, debug=True, threaded=True)
+    # 切換到腳本所在目錄，確保 Flask debug 模式的 reloader 能正確找到檔案
+    os.chdir(_script_dir)
+    
+    # 啟動 Flask 應用
+    # use_reloader=False 避免 watchdog 在錯誤目錄尋找檔案
+    # 如需自動重載，請從腳本所在目錄執行
+    app.run(host='0.0.0.0', port=8502, debug=True, threaded=True, use_reloader=False)
 

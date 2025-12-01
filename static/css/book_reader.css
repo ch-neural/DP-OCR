@@ -485,6 +485,27 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* GPIO 按鈕觸發動畫 */
+@keyframes gpioTrigger {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 20px 10px rgba(52, 152, 219, 0.5);
+        background-color: #27ae60;
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(52, 152, 219, 0);
+    }
+}
+
+.btn-primary.gpio-triggered {
+    animation: gpioTrigger 0.5s ease-in-out;
+}
+
 .loading-text {
     color: white;
     margin-top: 20px;
