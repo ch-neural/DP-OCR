@@ -21,11 +21,11 @@
             width: 100%;
             height: auto;
             display: block;
-            transform: scaleX(-1); /* 鏡像翻轉 */
+            transform: scaleX(1); /* 預設不鏡像（拍攝書本） */
         }
         
-        #webcam-video.no-mirror {
-            transform: scaleX(1); /* 不鏡像 */
+        #webcam-video.mirror {
+            transform: scaleX(-1); /* 鏡像翻轉（自拍模式） */
         }
         
         .webcam-overlay {
@@ -216,8 +216,8 @@
                     </select>
                     
                     <label class="checkbox-label" style="margin-top: 15px;">
-                        <input type="checkbox" id="mirror-mode" checked>
-                        <span>鏡像模式（自拍模式）</span>
+                        <input type="checkbox" id="mirror-mode">
+                        <span>鏡像模式（自拍用）</span>
                     </label>
                     
                     <div id="webcam-status" class="webcam-status disconnected">

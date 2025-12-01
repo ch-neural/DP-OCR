@@ -429,13 +429,31 @@ if __name__ == '__main__':
     # 切換到腳本所在目錄
     os.chdir(SCRIPT_DIR)
     
+    # 檢查是否有 SSL 證書
+    cert_file = os.path.join(SCRIPT_DIR, 'cert.pem')
+    key_file = os.path.join(SCRIPT_DIR, 'key.pem')
+    use_ssl = os.path.exists(cert_file) and os.path.exists(key_file)
+    
     print("\n" + "=" * 60)
     print("📖 Book Reader OCR - 遠端客戶端版本")
     print("=" * 60)
-    print(f"🌐 伺服器網址: http://0.0.0.0:8502")
+    
+    if use_ssl:
+        print(f"🔒 HTTPS 模式（Webcam 可用）")
+        print(f"🌐 伺服器網址: https://0.0.0.0:8502")
+        print(f"⚠️  首次連接請接受自簽證書警告")
+    else:
+        print(f"🌐 HTTP 模式")
+        print(f"🌐 伺服器網址: http://0.0.0.0:8502")
+        print(f"⚠️  Webcam 功能需要 HTTPS，請使用「上傳圖片」功能")
+    
     print(f"📡 用戶可以使用自己設備的 Webcam 進行 OCR")
     print(f"📁 圖片儲存路徑: {reader.image_save_path}")
     print("=" * 60 + "\n")
     
     # 啟動 Flask 應用
-    app.run(host='0.0.0.0', port=8502, debug=True, threaded=True, use_reloader=False)
+    if use_ssl:
+        app.run(host='0.0.0.0', port=8502, debug=True, threaded=True, 
+                use_reloader=False, ssl_context=(cert_file, key_file))
+    else:
+        app.run(host='0.0.0.0', port=8502, debug=True, threaded=True, use_reloader=False)

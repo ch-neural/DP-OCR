@@ -336,9 +336,9 @@ async function handleResolutionChange() {
 // 處理鏡像模式變更
 function handleMirrorChange() {
     if (elements.mirrorMode.checked) {
-        elements.webcamVideo.classList.remove('no-mirror');
+        elements.webcamVideo.classList.add('mirror');
     } else {
-        elements.webcamVideo.classList.add('no-mirror');
+        elements.webcamVideo.classList.remove('mirror');
     }
 }
 
@@ -429,9 +429,8 @@ async function handleCapture() {
         // 處理影像（旋轉和調整大小）
         const rotation = parseInt(elements.imageRotation.value) || 0;
         const maxSize = parseInt(elements.modelMaxSize.value) || 1024;
-        const isMirrored = currentMode === 'webcam' && elements.mirrorMode.checked;
         
-        const processedImage = await processImage(imageBase64, rotation, maxSize, isMirrored);
+        const processedImage = await processImage(imageBase64, rotation, maxSize);
         
         // 顯示處理後的照片
         elements.capturedImage.src = 'data:image/jpeg;base64,' + processedImage;
@@ -481,16 +480,9 @@ function captureFromVideo() {
     
     const ctx = canvas.getContext('2d');
     
-    // 如果是鏡像模式，需要在擷取時翻轉
-    if (elements.mirrorMode.checked) {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-    }
-    
+    // 直接擷取原始畫面（不做鏡像翻轉）
+    // 鏡像只是顯示效果，實際擷取的圖片應該是正常方向
     ctx.drawImage(video, 0, 0);
-    
-    // 重置變換
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
     
     // 轉換為 base64（不含前綴）
     const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
@@ -506,7 +498,7 @@ function showCaptureFlash() {
 }
 
 // 處理影像（旋轉和調整大小）
-async function processImage(base64Image, rotation, maxSize, flipHorizontal = false) {
+async function processImage(base64Image, rotation, maxSize) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = function() {
@@ -524,14 +516,9 @@ async function processImage(base64Image, rotation, maxSize, flipHorizontal = fal
             canvas.width = width;
             canvas.height = height;
             
-            // 應用變換
+            // 應用旋轉變換
             ctx.translate(width / 2, height / 2);
             ctx.rotate((rotation * Math.PI) / 180);
-            
-            if (flipHorizontal) {
-                ctx.scale(-1, 1);
-            }
-            
             ctx.translate(-img.width / 2, -img.height / 2);
             ctx.drawImage(img, 0, 0);
             
