@@ -140,11 +140,11 @@ pkill -f book_reader
 ## 📚 詳細文檔
 
 - 完整說明：[README.md](README.md)
-- 詳細安裝：[README/INSTALLATION.md](README/INSTALLATION.md)
-- 設定說明：[README/CONFIGURATION.md](README/CONFIGURATION.md)
-- SSL 憑證：[README/SSL_AUTO_CERTIFICATE.md](README/SSL_AUTO_CERTIFICATE.md)
-- 疑難排解：[README/TROUBLESHOOTING.md](README/TROUBLESHOOTING.md)
-- 錯誤訊息：[README/ERROR_MESSAGES.md](README/ERROR_MESSAGES.md)
+- 詳細安裝：[docs/INSTALLATION.md](docs/INSTALLATION.md)
+- 設定說明：[docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- SSL 憑證：[docs/SSL_AUTO_CERTIFICATE.md](docs/SSL_AUTO_CERTIFICATE.md)
+- 疑難排解：[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+- 錯誤訊息：[docs/ERROR_MESSAGES.md](docs/ERROR_MESSAGES.md)
 
 ---
 
@@ -156,7 +156,7 @@ pkill -f book_reader
 實體腳位 6  = GND
 ```
 
-完整腳位圖請參考：[README/INSTALLATION.md](README/INSTALLATION.md)
+完整腳位圖請參考：[docs/INSTALLATION.md](docs/INSTALLATION.md)
 
 ---
 

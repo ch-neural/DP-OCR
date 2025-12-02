@@ -36,7 +36,7 @@ curl http://localhost:5000/health
 # 應該看到: {"status": "healthy", "model": "DeepSeek-OCR", ...}
 ```
 
-> 💡 **詳細安裝指南**：請參閱 [README/DEEPSEEK_API_SETUP.md](README/DEEPSEEK_API_SETUP.md)
+> 💡 **詳細安裝指南**：請參閱 [docs/DEEPSEEK_API_SETUP.md](docs/DEEPSEEK_API_SETUP.md)
 
 ---
 
@@ -123,7 +123,7 @@ python book_reader_remote.py
 
 然後在任何設備的瀏覽器開啟：`https://<伺服器IP>:8502`
 
-> 🔐 **SSL 自動憑證**：程式會自動檢查並建立 SSL 自簽憑證，讓 Webcam 功能可正常使用。詳見 [README/SSL_AUTO_CERTIFICATE.md](README/SSL_AUTO_CERTIFICATE.md)
+> 🔐 **SSL 自動憑證**：程式會自動檢查並建立 SSL 自簽憑證，讓 Webcam 功能可正常使用。詳見 [docs/SSL_AUTO_CERTIFICATE.md](docs/SSL_AUTO_CERTIFICATE.md)
 
 **特色**：
 - 🎥 使用用戶自己的 Webcam（電腦或手機）
@@ -310,7 +310,7 @@ request_timeout = 90
 | 同一區網 | `http://192.168.1.100:5000` | API 在另一台區網機器 |
 | 遠端伺服器 | `http://your-server.com:5000` | API 在遠端伺服器 |
 
-> 💡 **完整配置指南**：請參閱 [README/DEEPSEEK_API_SETUP.md](README/DEEPSEEK_API_SETUP.md)
+> 💡 **完整配置指南**：請參閱 [docs/DEEPSEEK_API_SETUP.md](docs/DEEPSEEK_API_SETUP.md)
 
 ### GPIO 設定
 
@@ -492,36 +492,44 @@ example_bookReader/
 ├── book_reader.py           # CLI 終端機版主程式
 ├── gpio_button_service.py   # GPIO 按鈕服務（共用模組）
 ├── openai_vision_service.py # OpenAI 圖像預分析服務
-├── config.ini               # 設定檔
+├── config.ini.example       # 設定檔範本
 ├── requirements.txt         # Python 依賴套件
 ├── README.md                # 本說明文件
-├── cert.pem                 # SSL 憑證（自動生成）
-├── key.pem                  # SSL 私鑰（自動生成）
+├── QUICK_START.md           # 快速開始指南
+│
 ├── templates/               # Flask HTML 模板
 │   ├── book_reader.html       # Flask 版模板
 │   └── book_reader_remote.html # Remote 版模板
+│
 ├── static/                  # Flask 靜態資源
 │   ├── css/
 │   │   └── book_reader.css
 │   └── js/
 │       ├── book_reader.js        # Flask 版 JavaScript
 │       └── book_reader_remote.js # Remote 版 JavaScript
-├── README/                 # 詳細文檔目錄
+│
+├── docs/                   # 📚 詳細文檔目錄
 │   ├── INSTALLATION.md     # 詳細安裝指南
 │   ├── CONFIGURATION.md    # 設定檔說明
 │   ├── SSL_AUTO_CERTIFICATE.md # SSL 自動憑證說明
 │   ├── TROUBLESHOOTING.md  # 疑難排解
 │   └── ERROR_MESSAGES.md   # 錯誤訊息說明
+│
+├── scripts/                # ⚙️ 工具腳本目錄
+│   ├── test_components.py  # 元件測試腳本
+│   ├── test_gpio_button.py # GPIO 測試腳本
+│   ├── install_rpi5.sh     # RPi5 安裝腳本
+│   └── start_reader.sh     # 啟動腳本
+│
 ├── voices/                 # 音檔目錄（CLI 版使用）
 │   ├── 看完了1.mp3
-│   ├── 看完了2.mp3
-│   ├── 看不懂1.mp3
-│   └── 看不懂2.mp3
-├── logs/                   # 日誌目錄（自動建立）
-│   └── book_reader.log
-└── captured_images/        # 拍攝的照片（自動建立）
-    └── capture_YYYYMMDD_HHMMSS.jpg
+│   └── 看不懂1.mp3
+│
+├── logs/                   # 日誌目錄（自動建立，不上傳）
+└── captured_images/        # 拍攝照片（自動建立，不上傳）
 ```
+
+> ⚠️ **不會上傳到 GitHub 的檔案**：`config.ini`、`cert.pem`、`key.pem`、`logs/`、`captured_images/`、`ocr_results.json`
 
 ## 🔧 進階功能
 
@@ -568,7 +576,7 @@ python3 -c "from gpiozero import Button; btn = Button(17); print('請按下按�
 
 ### 常見問題
 
-詳細的疑難排解指南請參考 [README/TROUBLESHOOTING.md](README/TROUBLESHOOTING.md)
+詳細的疑難排解指南請參考 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
 #### 1. 找不到攝影機
 
@@ -621,8 +629,8 @@ sudo apt install --reinstall python3-rpi-lgpio
 如果遇到其他問題，請查看：
 
 1. 日誌檔案: `logs/book_reader.log`
-2. 詳細文檔: `README/` 目錄
-3. 錯誤訊息說明: `README/ERROR_MESSAGES.md`
+2. 詳細文檔: `docs/` 目錄
+3. 錯誤訊息說明: `docs/ERROR_MESSAGES.md`
 
 ## 📝 程式架構
 
@@ -697,7 +705,7 @@ sudo apt install --reinstall python3-rpi-lgpio
     - 憑證過期自動更新
   - 新增 `SSLCertificateManager` 類別
   - 新增 `cryptography` 依賴套件
-  - 新增 [SSL_AUTO_CERTIFICATE.md](README/SSL_AUTO_CERTIFICATE.md) 說明文件
+  - 新增 [SSL_AUTO_CERTIFICATE.md](docs/SSL_AUTO_CERTIFICATE.md) 說明文件
 
 - **v1.3.0** (2025-12-01)
   - 🆕 新增 Remote 遠端版 (`book_reader_remote.py`)

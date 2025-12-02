@@ -25,8 +25,13 @@ ENV/
 .env.*
 *.env
 
+# SSL 憑證（自動生成，敏感資料）
+cert.pem
+key.pem
+*.pem
+
 # 日誌檔案
-logs/*.log
+logs/
 *.log
 
 # OCR 結果（可能包含大量測試數據）
@@ -34,14 +39,7 @@ ocr_results.json
 ocr_results.*.json
 
 # 拍攝的圖片
-captured_images/*.jpg
-captured_images/*.png
-scanned_books/*.jpg
-scanned_books/*.png
-
-# 但保留目錄結構
-!logs/.gitkeep
-!captured_images/.gitkeep
+captured_images/
 
 # 本地配置檔案
 config.ini
@@ -50,7 +48,7 @@ config.ini
 config.ini.backup
 config.ini.*
 
-# 測試檔案
+# 測試圖片檔案
 test_*.jpg
 test_*.png
 test_capture.*
@@ -64,9 +62,7 @@ debug*.log
 profile.stats
 diagnostic_report.txt
 
-# 不上傳的 README 檔案（內部文檔）
-README/OPENAI_PREANALYSIS_CHANGELOG.md
-README/REQUEST_TIMEOUT_FIX.md
-README/CONTINUOUS_PREVIEW_FEATURE.md
-README/SIMULATION_MODE.md
+# 暫時性/內部文檔（已整合到 docs/）
+UPLOAD_COMPLETE.md
+GITHUB_UPLOAD_LOG.md
 
