@@ -16,11 +16,11 @@ cd example_bookReader
 pip3 install -r requirements.txt
 ```
 
-### 3. 連接硬體
+### 3. 連接硬體（Raspberry Pi 版本）
 
 ```
 按鈕一端 → GPIO17 (Pin 11)
-按鈕另一端 → 3.3V (Pin 1)
+按鈕另一端 → GND (Pin 6)
 USB 攝影機 → USB 接口
 ```
 
@@ -45,34 +45,55 @@ sudo usermod -a -G gpio,video $USER
 python3 test_components.py
 ```
 
-### 7. 啟動程式
+### 7. 選擇啟動模式
 
 ```bash
-./start_reader.sh
-# 或
+# 🌐 Flask Web 版（伺服器相機 + GPIO）
+python3 book_reader_flask.py
+
+# 📱 Remote 遠端版（客戶端 Webcam，自動 HTTPS）
+python3 book_reader_remote.py
+
+# 💻 CLI 終端機版
 python3 book_reader.py
 ```
 
 ---
 
-## 🎯 基本使用
+## 🎯 三種執行模式快速選擇
 
-1. 啟動程式後，等待「等待 GPIO17 觸發信號...」訊息
-2. 將要辨識的文件放在攝影機前
-3. 按下按鈕觸發辨識
-4. 等待拍照、辨識、播放音檔
-5. 查看終端機顯示的辨識結果
+| 模式 | 啟動命令 | 網址 | 適用場景 |
+|------|---------|------|---------|
+| **Flask Web 版** | `python3 book_reader_flask.py` | `http://IP:8502` | RPi 相機 + GPIO 按鈕 |
+| **Remote 遠端版** | `python3 book_reader_remote.py` | `https://IP:8502` | 用戶自帶 Webcam |
+| **CLI 終端機版** | `python3 book_reader.py` | N/A | 無頭運行 + 音效 |
+
+### 📱 Remote 遠端版（推薦給一般電腦使用）
+
+```bash
+python3 book_reader_remote.py
+```
+
+- 🔐 **自動 HTTPS**：程式會自動生成 SSL 憑證
+- 🎥 用戶可使用自己電腦/手機的 Webcam
+- ⚠️ 首次連接時，瀏覽器會顯示安全警告，點擊「進階」→「繼續前往」即可
 
 ---
 
 ## 🔧 常用命令
 
 ```bash
-# 啟動程式
+# Flask Web 版（伺服器相機）
+python3 book_reader_flask.py
+
+# Remote 遠端版（客戶端 Webcam）
+python3 book_reader_remote.py
+
+# CLI 終端機版
 python3 book_reader.py
 
 # 背景執行
-nohup python3 book_reader.py > output.log 2>&1 &
+nohup python3 book_reader_remote.py > output.log 2>&1 &
 
 # 查看日誌
 tail -f logs/book_reader.log
@@ -81,8 +102,7 @@ tail -f logs/book_reader.log
 ls -lh captured_images/
 
 # 停止程式
-# 按 Ctrl+C 或
-pkill -f book_reader.py
+pkill -f book_reader
 ```
 
 ---
@@ -112,6 +132,8 @@ pkill -f book_reader.py
 | API 連線失敗 | 檢查 `config.ini` 中的 `api_url` |
 | 找不到音檔 | 確認 `voices/` 目錄存在 |
 | 按鈕沒反應 | 用三用電表測試接線 |
+| Webcam 無法使用 | 使用 HTTPS 版本 (`book_reader_remote.py`) |
+| SSL 憑證警告 | 點擊「進階」→「繼續前往」 |
 
 ---
 
@@ -120,6 +142,7 @@ pkill -f book_reader.py
 - 完整說明：[README.md](README.md)
 - 詳細安裝：[README/INSTALLATION.md](README/INSTALLATION.md)
 - 設定說明：[README/CONFIGURATION.md](README/CONFIGURATION.md)
+- SSL 憑證：[README/SSL_AUTO_CERTIFICATE.md](README/SSL_AUTO_CERTIFICATE.md)
 - 疑難排解：[README/TROUBLESHOOTING.md](README/TROUBLESHOOTING.md)
 - 錯誤訊息：[README/ERROR_MESSAGES.md](README/ERROR_MESSAGES.md)
 
@@ -137,6 +160,6 @@ pkill -f book_reader.py
 
 ---
 
-**版本**: 1.0.0  
-**更新日期**: 2025-11-11
+**版本**: 1.4.0  
+**更新日期**: 2025-12-02
 

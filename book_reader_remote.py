@@ -7,8 +7,10 @@
 使用方式：
     python book_reader_remote.py
     
-    然後在任何設備的瀏覽器開啟：http://<伺服器IP>:8502
+    然後在任何設備的瀏覽器開啟：https://<伺服器IP>:8502
     用戶可以使用自己設備的 Webcam 拍攝照片並進行 OCR
+    
+    程式會自動檢查並建立 SSL 自簽憑證，以支援 HTTPS 和 Webcam 功能
 """
 
 import os
@@ -17,7 +19,7 @@ import time
 import json
 import logging
 import configparser
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import cv2
 import requests
@@ -25,7 +27,7 @@ import numpy as np
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, Tuple
 import base64
 
 # 取得腳本所在目錄
@@ -33,6 +35,227 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 載入 .env 環境變數
 load_dotenv(os.path.join(SCRIPT_DIR, '.env'))
+
+
+class SSLCertificateManager:
+    """SSL 自簽憑證管理器
+    
+    自動檢查並建立 SSL 自簽憑證，用於 HTTPS 連線。
+    這是讓瀏覽器能夠使用 Webcam 功能的必要條件。
+    """
+    
+    def __init__(self, cert_dir: str = None, cert_name: str = "cert", 
+                 key_name: str = "key", validity_days: int = 365):
+        """
+        初始化 SSL 憑證管理器
+        
+        Args:
+            cert_dir: 憑證存放目錄（預設為腳本目錄）
+            cert_name: 憑證檔案名稱（不含副檔名）
+            key_name: 私鑰檔案名稱（不含副檔名）
+            validity_days: 憑證有效天數
+        """
+        self.cert_dir = cert_dir or SCRIPT_DIR
+        self.cert_file = os.path.join(self.cert_dir, f"{cert_name}.pem")
+        self.key_file = os.path.join(self.cert_dir, f"{key_name}.pem")
+        self.validity_days = validity_days
+    
+    def check_certificates_exist(self) -> bool:
+        """檢查憑證檔案是否存在"""
+        return os.path.exists(self.cert_file) and os.path.exists(self.key_file)
+    
+    def check_certificate_valid(self) -> Tuple[bool, str]:
+        """
+        檢查憑證是否有效（未過期）
+        
+        Returns:
+            Tuple[bool, str]: (是否有效, 說明訊息)
+        """
+        if not self.check_certificates_exist():
+            return False, "憑證檔案不存在"
+        
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+            
+            with open(self.cert_file, "rb") as f:
+                cert_data = f.read()
+            
+            cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+            
+            # 檢查過期時間
+            now = datetime.utcnow()
+            if cert.not_valid_after_utc.replace(tzinfo=None) < now:
+                return False, f"憑證已於 {cert.not_valid_after_utc} 過期"
+            
+            # 檢查是否即將過期（7天內）
+            days_until_expiry = (cert.not_valid_after_utc.replace(tzinfo=None) - now).days
+            if days_until_expiry < 7:
+                return False, f"憑證將於 {days_until_expiry} 天後過期，建議更新"
+            
+            return True, f"憑證有效，將於 {days_until_expiry} 天後過期"
+            
+        except ImportError:
+            # 如果沒有 cryptography 庫，只檢查檔案是否存在
+            return True, "憑證檔案存在（無法驗證有效期）"
+        except Exception as e:
+            return False, f"檢查憑證時發生錯誤: {e}"
+    
+    def generate_self_signed_certificate(self, 
+                                          common_name: str = "localhost",
+                                          organization: str = "Book Reader OCR",
+                                          country: str = "TW") -> Tuple[bool, str]:
+        """
+        生成自簽 SSL 憑證
+        
+        Args:
+            common_name: 憑證通用名稱（通常是網域名或 localhost）
+            organization: 組織名稱
+            country: 國家代碼
+            
+        Returns:
+            Tuple[bool, str]: (是否成功, 說明訊息)
+        """
+        try:
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            from cryptography.hazmat.primitives import hashes
+            from cryptography.hazmat.backends import default_backend
+            from cryptography.hazmat.primitives.asymmetric import rsa
+            from cryptography.hazmat.primitives import serialization
+            import ipaddress
+            import socket
+            
+            print("🔐 正在生成 SSL 自簽憑證...")
+            
+            # 生成私鑰
+            key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+                backend=default_backend()
+            )
+            
+            # 獲取本機 IP 地址
+            local_ips = self._get_local_ips()
+            
+            # 設定憑證主體
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.COUNTRY_NAME, country),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization),
+                x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+            ])
+            
+            # 設定 Subject Alternative Names（讓憑證對多個網址有效）
+            san_list = [
+                x509.DNSName("localhost"),
+                x509.DNSName("*.localhost"),
+                x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                x509.IPAddress(ipaddress.IPv6Address("::1")),
+            ]
+            
+            # 添加本機 IP 地址
+            for ip in local_ips:
+                try:
+                    san_list.append(x509.IPAddress(ipaddress.IPv4Address(ip)))
+                except Exception:
+                    pass
+            
+            # 生成憑證
+            cert = (
+                x509.CertificateBuilder()
+                .subject_name(subject)
+                .issuer_name(issuer)
+                .public_key(key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(datetime.utcnow())
+                .not_valid_after(datetime.utcnow() + timedelta(days=self.validity_days))
+                .add_extension(
+                    x509.SubjectAlternativeName(san_list),
+                    critical=False,
+                )
+                .add_extension(
+                    x509.BasicConstraints(ca=True, path_length=0),
+                    critical=True,
+                )
+                .sign(key, hashes.SHA256(), default_backend())
+            )
+            
+            # 寫入私鑰檔案
+            with open(self.key_file, "wb") as f:
+                f.write(key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption()
+                ))
+            
+            # 寫入憑證檔案
+            with open(self.cert_file, "wb") as f:
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
+            
+            # 設定檔案權限（僅限擁有者讀寫）
+            os.chmod(self.key_file, 0o600)
+            os.chmod(self.cert_file, 0o644)
+            
+            ip_info = ", ".join(local_ips) if local_ips else "無"
+            return True, f"SSL 憑證已成功建立！\n   - 憑證檔案: {self.cert_file}\n   - 私鑰檔案: {self.key_file}\n   - 有效期限: {self.validity_days} 天\n   - 本機 IP: {ip_info}"
+            
+        except ImportError as e:
+            return False, f"缺少 cryptography 套件，請執行: pip install cryptography\n錯誤詳情: {e}"
+        except Exception as e:
+            return False, f"生成憑證時發生錯誤: {e}"
+    
+    def _get_local_ips(self) -> list:
+        """獲取本機所有 IP 地址"""
+        import socket
+        ips = []
+        try:
+            # 方法 1: 透過連接外部地址獲取主要 IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ips.append(s.getsockname()[0])
+            s.close()
+        except Exception:
+            pass
+        
+        try:
+            # 方法 2: 獲取所有網路介面的 IP
+            hostname = socket.gethostname()
+            for ip in socket.gethostbyname_ex(hostname)[2]:
+                if ip not in ips and not ip.startswith("127."):
+                    ips.append(ip)
+        except Exception:
+            pass
+        
+        return ips
+    
+    def ensure_certificates(self, force_regenerate: bool = False) -> Tuple[bool, str]:
+        """
+        確保 SSL 憑證存在且有效，如果不存在或無效則自動建立
+        
+        Args:
+            force_regenerate: 是否強制重新生成憑證
+            
+        Returns:
+            Tuple[bool, str]: (是否成功, 說明訊息)
+        """
+        if force_regenerate:
+            print("🔄 強制重新生成 SSL 憑證...")
+            return self.generate_self_signed_certificate()
+        
+        if not self.check_certificates_exist():
+            print("📝 未找到 SSL 憑證，正在自動建立...")
+            return self.generate_self_signed_certificate()
+        
+        is_valid, message = self.check_certificate_valid()
+        if not is_valid:
+            print(f"⚠️  {message}，正在重新建立...")
+            return self.generate_self_signed_certificate()
+        
+        return True, f"✅ 使用現有 SSL 憑證: {message}"
+    
+    def get_ssl_context(self) -> Tuple[str, str]:
+        """獲取 SSL context 所需的憑證和私鑰路徑"""
+        return (self.cert_file, self.key_file)
 
 # 嘗試匯入 OpenAI Vision 服務
 try:
@@ -425,28 +648,47 @@ def health_check():
 
 # ============ 主程式 ============
 
-if __name__ == '__main__':
+def main():
+    """主程式入口"""
     # 切換到腳本所在目錄
     os.chdir(SCRIPT_DIR)
-    
-    # 檢查是否有 SSL 證書
-    cert_file = os.path.join(SCRIPT_DIR, 'cert.pem')
-    key_file = os.path.join(SCRIPT_DIR, 'key.pem')
-    use_ssl = os.path.exists(cert_file) and os.path.exists(key_file)
     
     print("\n" + "=" * 60)
     print("📖 Book Reader OCR - 遠端客戶端版本")
     print("=" * 60)
     
-    if use_ssl:
-        print(f"🔒 HTTPS 模式（Webcam 可用）")
-        print(f"🌐 伺服器網址: https://0.0.0.0:8502")
-        print(f"⚠️  首次連接請接受自簽證書警告")
-    else:
-        print(f"🌐 HTTP 模式")
-        print(f"🌐 伺服器網址: http://0.0.0.0:8502")
-        print(f"⚠️  Webcam 功能需要 HTTPS，請使用「上傳圖片」功能")
+    # 初始化 SSL 憑證管理器並確保憑證存在
+    ssl_manager = SSLCertificateManager(cert_dir=SCRIPT_DIR)
+    success, message = ssl_manager.ensure_certificates()
     
+    if success:
+        print(f"\n{message}\n")
+        cert_file, key_file = ssl_manager.get_ssl_context()
+        use_ssl = True
+    else:
+        print(f"\n❌ SSL 憑證建立失敗: {message}")
+        print("⚠️  將使用 HTTP 模式，Webcam 功能可能無法使用")
+        print("💡 建議安裝 cryptography 套件: pip install cryptography\n")
+        use_ssl = False
+    
+    # 獲取本機 IP 地址
+    local_ips = ssl_manager._get_local_ips()
+    
+    print("-" * 60)
+    if use_ssl:
+        print("🔒 HTTPS 模式（Webcam 可用）")
+        print(f"🌐 本機網址: https://localhost:8502")
+        for ip in local_ips:
+            print(f"🌐 區網網址: https://{ip}:8502")
+        print("⚠️  首次連接請接受自簽憑證警告")
+    else:
+        print("🌐 HTTP 模式")
+        print(f"🌐 本機網址: http://localhost:8502")
+        for ip in local_ips:
+            print(f"🌐 區網網址: http://{ip}:8502")
+        print("⚠️  Webcam 功能需要 HTTPS，請使用「上傳圖片」功能")
+    
+    print("-" * 60)
     print(f"📡 用戶可以使用自己設備的 Webcam 進行 OCR")
     print(f"📁 圖片儲存路徑: {reader.image_save_path}")
     print("=" * 60 + "\n")
@@ -457,3 +699,7 @@ if __name__ == '__main__':
                 use_reloader=False, ssl_context=(cert_file, key_file))
     else:
         app.run(host='0.0.0.0', port=8502, debug=True, threaded=True, use_reloader=False)
+
+
+if __name__ == '__main__':
+    main()

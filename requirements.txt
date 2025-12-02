@@ -22,6 +22,9 @@ pygame>=2.5.0
 # OpenAI API（圖像預分析功能）
 openai>=1.6.0
 
+# SSL 自簽憑證自動生成（HTTPS 支援，讓 Webcam 功能可用）
+cryptography>=41.0.0
+
 # 環境變數載入
 python-dotenv>=1.0.0
 

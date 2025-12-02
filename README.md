@@ -121,12 +121,14 @@ cd example_bookReader
 python book_reader_remote.py
 ```
 
-然後在任何設備的瀏覽器開啟：`http://<伺服器IP>:8502`
+然後在任何設備的瀏覽器開啟：`https://<伺服器IP>:8502`
+
+> 🔐 **SSL 自動憑證**：程式會自動檢查並建立 SSL 自簽憑證，讓 Webcam 功能可正常使用。詳見 [README/SSL_AUTO_CERTIFICATE.md](README/SSL_AUTO_CERTIFICATE.md)
 
 **特色**：
 - 🎥 使用用戶自己的 Webcam（電腦或手機）
 - 📁 也可以直接上傳圖片檔案
-- 🔐 瀏覽器會請求攝影機權限
+- 🔐 **自動 HTTPS**：自動生成 SSL 憑證，支援 Webcam 功能
 - 🔄 支援鏡像模式切換
 - 🌐 伺服器不需要連接相機
 - ☁️ 適合雲端部署的 OCR 服務
@@ -493,6 +495,8 @@ example_bookReader/
 ├── config.ini               # 設定檔
 ├── requirements.txt         # Python 依賴套件
 ├── README.md                # 本說明文件
+├── cert.pem                 # SSL 憑證（自動生成）
+├── key.pem                  # SSL 私鑰（自動生成）
 ├── templates/               # Flask HTML 模板
 │   ├── book_reader.html       # Flask 版模板
 │   └── book_reader_remote.html # Remote 版模板
@@ -505,6 +509,7 @@ example_bookReader/
 ├── README/                 # 詳細文檔目錄
 │   ├── INSTALLATION.md     # 詳細安裝指南
 │   ├── CONFIGURATION.md    # 設定檔說明
+│   ├── SSL_AUTO_CERTIFICATE.md # SSL 自動憑證說明
 │   ├── TROUBLESHOOTING.md  # 疑難排解
 │   └── ERROR_MESSAGES.md   # 錯誤訊息說明
 ├── voices/                 # 音檔目錄（CLI 版使用）
@@ -678,11 +683,21 @@ sudo apt install --reinstall python3-rpi-lgpio
 
 ---
 
-**版本**: 1.3.0  
-**更新日期**: 2025-12-01  
+**版本**: 1.4.0  
+**更新日期**: 2025-12-02  
 **作者**: DeepSeek-OCR Team
 
 ### 更新紀錄
+
+- **v1.4.0** (2025-12-02)
+  - 🔐 **SSL 自動憑證功能**：Remote 遠端版現在自動生成 SSL 自簽憑證
+    - 程式啟動時自動檢查並建立 SSL 憑證
+    - 支援 HTTPS，讓瀏覽器 Webcam 功能可正常使用
+    - 自動偵測本機 IP 並加入憑證 SAN
+    - 憑證過期自動更新
+  - 新增 `SSLCertificateManager` 類別
+  - 新增 `cryptography` 依賴套件
+  - 新增 [SSL_AUTO_CERTIFICATE.md](README/SSL_AUTO_CERTIFICATE.md) 說明文件
 
 - **v1.3.0** (2025-12-01)
   - 🆕 新增 Remote 遠端版 (`book_reader_remote.py`)
